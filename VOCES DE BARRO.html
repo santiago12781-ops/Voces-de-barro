@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voces de barro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#180e09;overflow:hidden;font-family:"Fraunces","Cormorant Garamond",Georgia,"Times New Roman",serif;color:#f5ebe0}
+#wrap{height:100%;display:flex;align-items:center;justify-content:center}
+#stage{position:relative;aspect-ratio:16/9;width:min(100vw,calc(100vh*16/9));overflow:hidden;background:#180e09}
+/* capas: suelo 0 · canvas 1 · grano/viñeta 2 · UI 10 */
+#bg{position:absolute;inset:0;z-index:0;background:radial-gradient(ellipse at 50% 40%,#3a2012 0%,#2b1810 55%,#180e09 100%)}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:1}
+#grain{position:absolute;inset:0;z-index:2;pointer-events:none;
+ background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .85  0 0 0 0 .62  0 0 0 0 .45  0 0 0 .5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+ opacity:.9;mix-blend-mode:soft-light}
+#vignette{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(circle at center, transparent 35%, rgba(13, 19, 26, 0.5) 75%, rgba(13, 19, 26, 0.9) 100%)}
+.hud{position:absolute;pointer-events:none;z-index:10;line-height:1.45}
+
+/* Título */
+#title{top:3.5%;left:2.5%;padding-bottom:12px;border-bottom:1.5px solid rgba(217,119,87,.3);
+ font-weight:600;font-size:clamp(22px,2.5vw,36px);letter-spacing:.1em;text-transform:uppercase;color:#fff8f0;line-height:1.1}
+#title small{display:block;margin-top:10px;font-size:14px;font-weight:400;letter-spacing:.03em;text-transform:none;color:#f5ebe0}
+
+/* Placas de arcilla fina */
+.card{width:24%;min-width:240px;padding:20px 22px 22px;border-radius:10px;
+ background:rgba(35,20,14,.8);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+ border:1.5px solid rgba(217,119,87,.3)}
+.card b{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+ font-weight:600;font-size:clamp(16px,1.15vw,18px);letter-spacing:.01em;color:#fff8f0}
+.card small{display:block;margin-top:6px;font-size:14px;font-weight:400;letter-spacing:.01em;line-height:1.4;color:#f5ebe0}
+.val{flex:none;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.02em;color:#f0a98a}
+#low{left:2.5%;top:22%}
+#mid{left:2.5%;top:53%}
+#high{right:2.5%;top:22%}
+#vol{right:2.5%;top:53%}
+
+/* Sliders (sin cambios de diseño; solo espaciado en px por la nueva tipografía) */
+.bar{position:relative;height:1.5px;margin:18px 0 14px;background:rgba(241,228,211,.2)}
+.bar i{position:relative;display:block;height:100%;width:0;background:#c46d4e}
+.bar i::after{content:"";position:absolute;right:0;top:-3px;width:1.5px;height:7.5px;background:#c46d4e}
+.bar::after{content:"";position:absolute;left:0;right:0;top:6px;height:3px;
+ background:repeating-linear-gradient(90deg,rgba(241,228,211,.2) 0 1px,transparent 1px 10%)}
+
+#status{bottom:3.5%;left:2.5%;max-width:26%;font-size:14px;line-height:1.4;letter-spacing:.01em;color:#f5ebe0;opacity:.9}
+
+/* Botones: cajas de terracota mate con relieve artesanal suave */
+.btn{position:relative;font:inherit;font-weight:600;font-size:clamp(16px,1.1vw,18px);letter-spacing:.02em;color:#f5ebe0;
+ cursor:pointer;white-space:nowrap;padding:.8em 1.4em;border-radius:10px;
+ background:rgba(65,35,25,.85);border:1.5px solid rgba(217,119,87,.4);
+ box-shadow:0 3px 8px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,220,190,.12);transition:all .2s ease}
+.btn:hover{background:rgba(217,119,87,.35);border-color:rgba(217,119,87,.7)}
+.btn:active{box-shadow:inset 0 3px 8px rgba(0,0,0,.45);transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid #f0a98a;outline-offset:3px}
+
+/* Botón principal: sello alfarero de arcilla tostada */
+#start{position:absolute;z-index:10;left:50%;bottom:14.5%;transform:translateX(-50%);
+ padding:1em 2.5em;font-size:clamp(16px,1.2vw,18px);font-weight:700;letter-spacing:.03em;color:#fff8f0;
+ background:linear-gradient(145deg,#d97757,#b85233);border:0;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.4)}
+#start:hover{background:linear-gradient(145deg,#e48564,#c25a39);box-shadow:0 8px 20px rgba(0,0,0,.4)}
+#start:active{transform:translateX(-50%) translateY(2px);box-shadow:0 3px 10px rgba(0,0,0,.4)}
+
+/* Dock inferior */
+#dock{position:absolute;z-index:10;right:2.5%;bottom:3.5%;display:flex;gap:10px}
+#pause,#skip{display:none}
+#pause.paused{background:rgba(217,119,87,.45);border-color:rgba(217,119,87,.8)}
+
+/* Barra superior: grabar y catálogo */
+#tools{position:absolute;z-index:10;top:3.5%;left:50%;transform:translateX(-50%);display:flex;gap:10px}
+#tools .btn{padding:.6em 1.2em;font-size:clamp(14px,1vw,16px)}
+#rec .dot{display:inline-block;width:.6em;height:.6em;border-radius:50%;margin-right:.6em;background:#d97757}
+#rec.recording{background:rgba(217,119,87,.35);border-color:#d97757}
+#rec.recording .dot{background:#ff6a4a;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+/* Catálogo de grabaciones */
+#catalog{position:absolute;z-index:20;right:2.5%;top:12%;width:min(440px,38%);min-width:300px;max-height:70%;display:none;flex-direction:column;
+ padding:18px 18px 16px;border-radius:10px;background:rgba(35,20,14,.92);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1.5px solid rgba(217,119,87,.3)}
+#catalog.open{display:flex}
+.chead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.chead b{font-size:clamp(16px,1.15vw,18px);font-weight:600;color:#fff8f0}
+.chead .btn,.cfoot .btn{padding:.45em 1em;font-size:14px}
+#catlist{overflow:auto;display:flex;flex-direction:column;gap:8px;min-height:60px}
+.cempty{font-size:14px;line-height:1.5;color:#f5ebe0;opacity:.85;padding:6px 2px}
+.item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;border:1px solid rgba(241,228,211,.12);background:rgba(65,35,25,.55)}
+.item.on{border-color:rgba(217,119,87,.7);background:rgba(217,119,87,.18)}
+.ibtn{flex:none;width:34px;height:34px;display:grid;place-items:center;border-radius:6px;border:1px solid rgba(217,119,87,.4);background:transparent;color:#f5ebe0;cursor:pointer;transition:all .2s ease}
+.ibtn:hover{background:rgba(217,119,87,.35)} .ibtn svg{width:16px;height:16px;fill:currentColor}
+.meta{flex:1;min-width:0}
+.nm{font-size:15px;font-weight:600;color:#fff8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text}
+.sub{font-size:13px;color:#e8d5c0;opacity:.85}
+.prog{height:4px;margin-top:8px;background:rgba(241,228,211,.2);cursor:pointer;border-radius:2px;overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:#c46d4e}
+.cfoot{margin-top:12px}
+.cquota{font-size:13px;line-height:1.4;color:#e8d5c0;opacity:.85;margin-bottom:10px}
+/* Pantalla completa: etiqueta discreta */
+#fs{position:absolute;z-index:10;top:3.5%;right:2.5%;padding:.5em 1em;font-size:14px;font-weight:500;
+ background:transparent;box-shadow:none}
+#fs:hover{background:rgba(217,119,87,.25)}
+</style>
+</head>
+<body>
+<div id="wrap">
+ <div id="stage">
+  <div id="bg"></div>
+  <div id="grain"></div>
+  <div id="vignette"></div>
+  <div class="hud" id="title">Voces de barro<small>Instalación sonora · Alfarería de Juana Sánchez</small></div>
+  <div class="hud card" id="low"><b>Graves / Base del Rollo <span class="val" id="vl">0.00</span></b><small>Moldeando el asiento de la pieza</small><div class="bar"><i id="bl"></i></div></div>
+  <div class="hud card" id="mid"><b>Medias / Vientre Tinajero <span class="val" id="vm">0.00</span></b><small>Elevando la pared de agua</small><div class="bar"><i id="bm"></i></div></div>
+  <div class="hud card" id="high"><b>Agudas / Textura y Quema <span class="val" id="vh">0.00</span></b><small>Definiendo pliegues y superficie</small><div class="bar"><i id="bh"></i></div></div>
+  <div class="hud card" id="vol"><b>Fuerza del Impulso <span class="val" id="vv">0.00</span></b><small>Nivel de deformación sonora</small><div class="bar"><i id="bv"></i></div></div>
+  <div class="hud" id="status">Micrófono apagado</div>
+  <button class="btn" id="start">Iniciar micrófono</button>
+  <button class="btn" id="fs">Pantalla completa</button>
+  <div id="tools">
+   <button class="btn" id="rec"><span class="dot"></span><span id="rectxt">Grabar</span></button>
+   <button class="btn" id="catbtn">Catálogo (0)</button>
+  </div>
+  <div id="catalog" role="dialog" aria-label="Catálogo de grabaciones">
+   <div class="chead"><b>Catálogo de grabaciones</b><button class="btn" id="catclose">Cerrar</button></div>
+   <div id="catlist"></div>
+   <div class="cfoot"><div class="cquota" id="cquota"></div><button class="btn" id="loadbtn">Cargar archivo de audio</button><input type="file" id="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.webm,.flac" multiple hidden></div>
+  </div>
+  <div id="dock">
+   <button class="btn" id="skip">Saltar animación</button>
+   <button class="btn" id="pause">Pausar (espacio)</button>
+   <button class="btn" id="reset">Reiniciar forma</button>
+   <button class="btn" id="export">Exportar STL para impresión 3D</button>
+  </div>
+ </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const stage = $('stage');
+
+// ---------- Escena ----------
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.75));   // equilibrio calidad / 60 FPS
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.insertBefore(renderer.domElement, $('grain'));
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x180e09, 0.035);   // bruma del río al caer la tarde
+const camera = new THREE.PerspectiveCamera(38, 16/9, 0.1, 400);
+camera.position.set(0, 0.6, 6.4);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.enablePan = false;
+controls.minDistance = 3; controls.maxDistance = 10;
+controls.target.set(0, 0, 0);
+
+// ---------- Entorno: Juana Sánchez (Bolívar) · orilla del Magdalena y la ciénaga, hora dorada ----------
+scene.background = new THREE.Color(0x180e09);   // idéntico a la niebla: sin línea de horizonte
+
+// IBL: taller de alfarería procedural → PMREM (reflejos difusos y matices térmicos 360°)
+(function buildEnv(){
+  try{
+    const es = new THREE.Scene();
+    const room = new THREE.Mesh(new THREE.BoxGeometry(24,12,24), new THREE.MeshBasicMaterial({color:0x1c110b, side:THREE.BackSide}));
+    room.position.y = 5; es.add(room);
+    const panel = (w,h,col,k,x,y,z,ry,rx)=>{
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h), new THREE.MeshBasicMaterial({color:new THREE.Color(col[0]*k,col[1]*k,col[2]*k), side:THREE.DoubleSide}));
+      m.position.set(x,y,z); m.rotation.set(rx||0, ry||0, 0); es.add(m);
+    };
+    panel(7,5,[1,.68,.4],7,   -11.5,5,-2,  Math.PI/2);       // ventana cálida del taller
+    panel(8,8,[1,.8,.55],3.2,  0,10.9,0,   0, Math.PI/2);    // claraboya cenital
+    panel(10,3,[1,.55,.3],1.2, 0,1.2,-11.8, 0);              // luz cálida del fondo del patio
+    panel(20,20,[.6,.32,.16],2.2, 0,-1.2,0, 0, -Math.PI/2);  // rebote de la tierra del patio (hemisferio inferior)
+    panel(5,4,[1,.5,.25],4,    11.5,3,6,   -Math.PI/2);      // puerta con luz de atardecer
+    const pm = new THREE.PMREMGenerator(renderer);
+    scene.environment = pm.fromScene(es, 0.04).texture;
+    pm.dispose();
+  }catch(e){ console.warn('IBL no disponible', e); }
+})();
+
+// Luz ambiental baja + rebote cálido del cielo / agua oscura de la ciénaga
+scene.add(new THREE.AmbientLight(0xffc89a, 0.05));
+scene.add(new THREE.HemisphereLight(0xe88a5d, 0x7a3f22, 0.4));
+
+// Sol bajo de la tarde desde una esquina alta
+const sun = new THREE.DirectionalLight(0xffb07c, 1.8);
+sun.position.set(6, 4, 3);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.radius = 5;
+sun.shadow.bias = -0.0005;
+sun.shadow.normalBias = 0.03;
+Object.assign(sun.shadow.camera,{left:-6,right:6,top:6,bottom:-6,near:1,far:25});
+scene.add(sun);
+
+// Luz rasante tenue que revela el grano de la arcilla
+const rake = new THREE.DirectionalLight(0xffa868, 0.22);
+rake.position.set(-5, 1.2, 3);
+scene.add(rake);
+
+// Contraluz cálido de atardecer: alimenta la dispersión subsuperficial en cuello y borde
+const back = new THREE.DirectionalLight(0xff9a5a, 0.9);
+back.position.set(-4, 2.2, -5);
+scene.add(back);
+
+// Rebotes difusos anaranjados del patio de tierra sobre la base de la pieza (sin reflejos de espejo)
+const bounce = new THREE.PointLight(0xff8a50, 2.2, 6, 1.5);
+bounce.position.set(0.2, -0.9, 1.6);
+scene.add(bounce);
+const bounce2 = new THREE.PointLight(0xffa060, 1.2, 6, 1.5);
+bounce2.position.set(-1.3, -0.95, -1.2);
+scene.add(bounce2);
+
+// Ruido periódico compartido (texturas sin costura)
+const nzLat = n => { const L=new Float32Array(n*n); for(let i=0;i<L.length;i++) L[i]=Math.random(); return {n,L}; };
+const nzVn = (l,x,y)=>{ const n=l.n, L=l.L; x*=n; y*=n;
+  const xi=Math.floor(x), yi=Math.floor(y), fx=x-xi, fy=y-yi, sx=fx*fx*(3-2*fx), sy=fy*fy*(3-2*fy);
+  const x0=xi%n, x1=(xi+1)%n, y0=yi%n, y1=(yi+1)%n;
+  const a=L[y0*n+x0], b=L[y0*n+x1], c=L[y1*n+x0], d=L[y1*n+x1];
+  return a+(b-a)*sx+(c-a)*sy+(a-b-c+d)*sx*sy; };
+const nzFbm = (ls,x,y)=>{ let s=0,a=.5,t=0; for(const l of ls){ s+=a*nzVn(l,x,y); t+=a; a*=.5; } return s/t; };
+
+// Suelo PBR: patio de tierra apisonada / arcilla de ribera (Depresión Momposina, Juana Sánchez)
+// Arcilla arenosa, ceniza de leña de los hornos, fragmentos de cerámica, grietas de secado y barridos a mano
+function buildFloor(){
+  const S=1024, lerp=(a,b,t)=>a+(b-a)*t;
+  const sm=(a,b,x)=>{x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x)};
+  const hash=(a,b)=>{ let h=Math.imul(a+17,374761393)^Math.imul(b+31,668265263); h=Math.imul(h^(h>>>13),1274126177); return ((h^(h>>>16))>>>0)/4294967295; };
+  const LH=[8,16,32,64].map(nzLat), LC=[3,6,12].map(nzLat), LA=[2,4].map(nzLat), LK=[4,8].map(nzLat), LZ=[3,5].map(nzLat);
+  const mk=()=>{ const c=document.createElement('canvas'); c.width=c.height=S; const x=c.getContext('2d'); return {c,x,d:x.createImageData(S,S)}; };
+  const C=mk(), Nm=mk(), R=mk(), H=new Float32Array(S*S);
+
+  // Barridos de escoba (líneas finas) y alisado con la mano / llana (franjas anchas)
+  const lay=()=>{ const c=document.createElement('canvas'); c.width=c.height=S; const x=c.getContext('2d'); x.fillStyle='#000'; x.fillRect(0,0,S,S); x.lineCap='round'; return x; };
+  const swC=lay(), scC=lay();
+  const path=(len,spread)=>{ const x=Math.random()*S, y=Math.random()*S, a=(Math.random()-.5)*spread;
+    return {x,y,cx:x+Math.cos(a)*len/2+(Math.random()-.5)*len*.2, cy:y+Math.sin(a)*len/2+(Math.random()-.5)*len*.2, ex:x+Math.cos(a)*len, ey:y+Math.sin(a)*len}; };
+  const draw=(ctx,p,w,al)=>{ ctx.lineWidth=w; ctx.strokeStyle='rgba(255,255,255,'+al+')';
+    for(const dx of [-S,0,S]){ ctx.beginPath(); ctx.moveTo(p.x+dx,p.y); ctx.quadraticCurveTo(p.cx+dx,p.cy,p.ex+dx,p.ey); ctx.stroke(); } };
+  for(let k=0;k<14;k++){ const p=path(300+Math.random()*400,.9), w=30+Math.random()*50; draw(swC,p,w,.2); draw(swC,p,w*.7,.2); draw(swC,p,w*.45,.22); }
+  for(let k=0;k<170;k++){ const p=path(80+Math.random()*320,1.6); draw(scC,p,.8+Math.random()*1.2,.25+Math.random()*.45); }
+  const SW=swC.getImageData(0,0,S,S).data, SC=scC.getImageData(0,0,S,S).data;
+
+  // Puntos de la red para las grietas de secado (Voronoi periódico) y para las piedrecillas
+  const G=9, fpx=new Float32Array(G*G), fpy=new Float32Array(G*G);
+  for(let i=0;i<G*G;i++){ fpx[i]=.15+.7*Math.random(); fpy[i]=.15+.7*Math.random(); }
+  const Gp=40;
+
+  const ocre=[118,82,46], tierra=[96,62,40], terra=[108,52,32], ceniza=[76,68,60];    // ocre profundo · arcilla · terracota cocida · ceniza de leña
+  const sand=[176,146,104], sherd=[130,64,40], stone=[94,88,82];
+  for(let y=0;y<S;y++) for(let x=0;x<S;x++){
+    const u=x/S, v=y/S, k=y*S+x, i=k*4;
+    const h=nzFbm(LH,u,v), c1=nzFbm(LC,u,v), ash=sm(.57,.7,nzFbm(LA,u,v)), tm=sm(.58,.72,nzFbm(LZ,u,v));
+    const sw=SW[i]/255, sc=SC[i]/255, grain=Math.random();
+    let col=[0,0,0];
+    for(let j=0;j<3;j++){ let c=lerp(ocre[j],tierra[j],sm(.4,.6,c1)); c=lerp(c,terra[j],tm*.8); c=lerp(c,ceniza[j],ash*.65); col[j]=c; }
+    let ht=.55+.1*(h-.5)+.02*grain, rr=.9+.1*(c1-.5);
+    let tone=(.9+.2*h)*(.94+.12*grain)*(1-.1*sw)*(1-.12*sc);
+    // grietas de secado
+    const cm=sm(.52,.66,nzFbm(LK,u,v)); let crack=0;
+    if(cm>.02){
+      const gx=Math.floor(u*G), gy=Math.floor(v*G); let d1=9,d2=9;
+      for(let oy=-1;oy<=1;oy++) for(let ox=-1;ox<=1;ox++){
+        const cx=gx+ox, cy=gy+oy, id=((cx%G+G)%G)+((cy%G+G)%G)*G;
+        const d=Math.hypot(u*G-(cx+fpx[id]), v*G-(cy+fpy[id]));
+        if(d<d1){d2=d1;d1=d;} else if(d<d2) d2=d;
+      }
+      crack=(1-sm(0,.05,d2-d1))*cm;
+    }
+    tone*=1-.5*crack; ht-=.3*crack; ht-=.04*sc; ht=lerp(ht,.55,sw*.6);
+    // piedrecillas y fragmentos de cerámica
+    const gx=Math.floor(u*Gp), gy=Math.floor(v*Gp); let pm=0, pc=null;
+    if(hash(gx,gy)<.22){
+      const cx=gx+.3+.4*hash(gx+5,gy+9), cy=gy+.3+.4*hash(gx+11,gy+3), r=.1+.12*hash(gx+2,gy+7);
+      const d=Math.hypot(u*Gp-cx, v*Gp-cy);
+      if(d<r){ pm=1-sm(r*.6,r,d); pc=hash(gx+13,gy+1)<.5?sherd:stone; ht+=.3*pm*(1-d/r); }
+    }
+    const spk=grain>.986?1:0, ashy=ash;
+    for(let j=0;j<3;j++){
+      let c=col[j]*tone;
+      c=lerp(c,sand[j],spk*.55);
+      if(pc) c=lerp(c,pc[j],pm*.9);
+      C.d.data[i+j]=Math.min(255,c);
+    }
+    C.d.data[i+3]=255;
+    H[k]=ht;
+    let r=rr; r=lerp(r,.95,spk); r=lerp(r,.94,ashy*.5); r=lerp(r,.84,sw*.8); r=lerp(r,.95,crack); r=lerp(r,.82,pm);
+    r=Math.max(.8,Math.min(.96,r));
+    R.d.data[i]=R.d.data[i+1]=R.d.data[i+2]=r*255; R.d.data[i+3]=255;
+  }
+  for(let y=0;y<S;y++) for(let x=0;x<S;x++){
+    const i=(y*S+x)*4;
+    const hl=H[y*S+(x-1+S)%S], hr=H[y*S+(x+1)%S], hu=H[((y-1+S)%S)*S+x], hd=H[((y+1)%S)*S+x];
+    let nx=-(hr-hl)*12, ny=(hd-hu)*12, nz=1; const len=Math.hypot(nx,ny,nz); nx/=len; ny/=len; nz/=len;
+    Nm.d.data[i]=(nx*.5+.5)*255; Nm.d.data[i+1]=(ny*.5+.5)*255; Nm.d.data[i+2]=(nz*.5+.5)*255; Nm.d.data[i+3]=255;
+  }
+  const tex=(o,srgb)=>{ o.x.putImageData(o.d,0,0); const t=new THREE.CanvasTexture(o.c);
+    t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(62,62);     // cada textura cubre ≈ 8 unidades
+    t.anisotropy=renderer.capabilities.getMaxAnisotropy(); if(srgb) t.encoding=THREE.sRGBEncoding; return t; };
+  return {map:tex(C,true), normal:tex(Nm), rough:tex(R)};
+}
+const fl = buildFloor();
+const floorMat = new THREE.MeshStandardMaterial({map:fl.map, normalMap:fl.normal, normalScale:new THREE.Vector2(1,1),
+  roughnessMap:fl.rough, roughness:1, metalness:0, envMapIntensity:0.3});
+// Máscara radial: lejos de la vasija el suelo se mezcla con el fondo (#180e09), sin borde ni horizonte
+// + variación de tono a gran escala (rompe la repetición de la textura)
+floorMat.onBeforeCompile = sh => {
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>','#include <common>\nvarying vec3 vWPos;')
+    .replace('#include <begin_vertex>','#include <begin_vertex>\nvWPos = (modelMatrix*vec4(position,1.0)).xyz;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>',`#include <common>
+varying vec3 vWPos;
+float h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float vnz(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+  return mix(mix(h21(i),h21(i+vec2(1.0,0.0)),f.x), mix(h21(i+vec2(0.0,1.0)),h21(i+vec2(1.0,1.0)),f.x), f.y); }`)
+    .replace('#include <map_fragment>',`#include <map_fragment>
+{ float t = 0.6*vnz(vWPos.xz*0.07) + 0.4*vnz(vWPos.xz*0.23); diffuseColor.rgb *= 0.8 + 0.4*t; }`)
+    .replace('#include <fog_fragment>',`float fadeR = smoothstep(12.0, 48.0, length(vWPos.xz));
+gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.0941, 0.0549, 0.0353), fadeR);
+#include <fog_fragment>`);
+};
+floorMat.customProgramCacheKey = () => 'voces-suelo-v3';
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(500,500), floorMat);
+floor.rotation.x = -Math.PI/2; floor.position.y = -1.151; floor.receiveShadow = true;
+scene.add(floor);
+
+// Sombra de contacto + oclusión ambiental bajo la base (se ajusta al radio real de la base deformada)
+const aoTex = (()=>{ const c=document.createElement('canvas'); c.width=c.height=256; const x=c.getContext('2d');
+  const g=x.createRadialGradient(128,128,0,128,128,128);
+  g.addColorStop(0,'rgba(0,0,0,.95)'); g.addColorStop(.35,'rgba(0,0,0,.6)'); g.addColorStop(.7,'rgba(0,0,0,.18)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle=g; x.fillRect(0,0,256,256); return new THREE.CanvasTexture(c); })();
+const mkDecal=(op,y)=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),
+  new THREE.MeshBasicMaterial({map:aoTex, transparent:true, opacity:op, depthWrite:false, fog:false, toneMapped:false, polygonOffset:true, polygonOffsetFactor:-2}));
+  m.rotation.x=-Math.PI/2; m.position.y=y; m.renderOrder=1; scene.add(m); return m; };
+const aoWide = mkDecal(.5,-1.1185), aoCore = mkDecal(.85,-1.1175);
+
+// Actualización por frame del entorno (contacto, polvo, uniformes del shader de arcilla)
+function updateEnv(){
+  const R=Math.hypot(pos.getX(2),pos.getZ(2));                         // radio real de la base deformada
+  aoCore.scale.setScalar(R*2.3); aoWide.scale.setScalar(R*4.6);
+  camera.updateMatrixWorld();
+  clayU.uBackV.value.copy(back.position).normalize().transformDirection(camera.matrixWorldInverse);
+  clayU.uUpV.value.set(0,1,0).transformDirection(camera.matrixWorldInverse);
+}
+
+// ---------- Pellizcos suaves de modelado (solo geometría) ----------
+const dents = [];
+for(let k=0;k<4;k++) dents.push({phi:Math.random()*6.2832, t:.2+Math.random()*.55, a:-(0.03+Math.random()*0.02)});
+
+// ---------- Terracota cocida: mapa de color orgánico + micro-grano ----------
+function buildClay(N, nTotal){
+  const S = 1024;
+  const lerp = (a,b,t)=>a+(b-a)*t;
+  const sm = (a,b,x)=>{x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x)};
+  const wrap = x => x-Math.floor(x);
+  const lat = n => { const L = new Float32Array(n*n); for(let i=0;i<L.length;i++) L[i]=Math.random(); return {n,L}; };
+  const vn = (l,x,y)=>{                      // ruido de valor periódico (sin costura en la vuelta)
+    const n=l.n, L=l.L; x*=n; y*=n;
+    const xi=Math.floor(x), yi=Math.floor(y), fx=x-xi, fy=y-yi;
+    const sx=fx*fx*(3-2*fx), sy=fy*fy*(3-2*fy);
+    const x0=xi%n, x1=(xi+1)%n, y0=yi%n, y1=(yi+1)%n;
+    return lerp(lerp(L[y0*n+x0],L[y0*n+x1],sx), lerp(L[y1*n+x0],L[y1*n+x1],sx), sy);
+  };
+  const fbm = (ls,x,y)=>{ let s=0,a=.5,t=0; for(const l of ls){ s+=a*vn(l,x,y); t+=a; a*=.5; } return s/t; };
+  const LW=[3,6].map(lat), LW2=[3,6].map(lat);          // deformación del dominio: manchas irregulares
+  const LBig=[3,5,9,17].map(lat), LTone=[2,4].map(lat); // manchas de arcilla oscura / luminosidad
+  const LBurn=[5,11,23].map(lat);                       // incineración leve
+  const LF=lat(512), LP=lat(256), LSp=lat(384);         // micro-grano, poros, motas
+  const mk = () => { const c=document.createElement('canvas'); c.width=c.height=S; const x=c.getContext('2d'); return {c, x, d:x.createImageData(S,S)}; };
+  const C=mk(), B=mk();
+  const base=[196,109,78], dk=[140,66,40], bn=[107,49,27];   // #c46d4e · #8c4228 · #6b311b
+  for(let y=0;y<S;y++){
+    for(let x=0;x<S;x++){
+      const u=x/S, v=y/S, i=(y*S+x)*4;
+      const tt = ((1-v)*(nTotal-1)-2)/N;                      // altura de la pared exterior (0 base · 1 borde)
+      const outer = tt>=0 && tt<=1.02;
+      const baseM = outer ? 1-sm(0,.2,tt) : 0;                // base
+      const neckM = outer ? Math.exp(-((tt-.86)*(tt-.86))/(2*.07*.07)) : 0;   // cuello
+      const innerM = outer ? 0 : .35;                         // interior de la boca
+      const uu=wrap(u+(fbm(LW,u,v)-.5)*.16), vv=wrap(v+(fbm(LW2,u,v)-.5)*.16);
+      const big=fbm(LBig,uu,vv), tone=fbm(LTone,uu,vv), bz=fbm(LBurn,uu,vv);
+      const dark = sm(.52,.74,big)*.6;                        // manchas sutiles de arcilla oscura
+      const burn = Math.min(1, sm(.48,.7,bz)*(.95*baseM+.8*neckM+innerM))*.85;
+      const speck = sm(.82,.93,vn(LSp,u,v))*.5;
+      const lum = (.93+.14*tone)*(1-.14*speck);
+      for(let j=0;j<3;j++){
+        let c = lerp(base[j],dk[j],dark);
+        c = lerp(c,bn[j],burn);
+        C.d.data[i+j] = Math.min(255,c*lum);
+      }
+      C.d.data[i+3]=255;
+      const pore = sm(.8,.94,vn(LP,u,v));
+      const grain = .55*Math.random()+.45*vn(LF,u,v);        // micro-grano fino y denso
+      const h = Math.max(0,Math.min(1,.5+(grain-.5)*.9-.3*pore+.03*(big-.5)));
+      B.d.data[i]=B.d.data[i+1]=B.d.data[i+2]=h*255; B.d.data[i+3]=255;
+    }
+  }
+  const tex = (o,srgb)=>{ o.x.putImageData(o.d,0,0); const t=new THREE.CanvasTexture(o.c);
+    t.wrapS=THREE.RepeatWrapping;
+    t.anisotropy=renderer.capabilities.getMaxAnisotropy();
+    if(srgb) t.encoding=THREE.sRGBEncoding; return t; };
+  return {map:tex(C,true), bump:tex(B)};
+}
+
+// ---------- Vasija (LatheGeometry densa) ----------
+const H = 2.2, SEG = 160;
+const sstep = (a,b,x)=>{x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x)};
+function Rp(t){
+  let r = 0.55 + 0.45*Math.sin(Math.PI*(0.1+0.75*t));
+  r *= 1 - 0.38*sstep(0.7,0.95,t);
+  r *= 0.8 + 0.2*sstep(0,0.15,t);
+  r += 0.09*sstep(0.94,1,t);
+  return r;
+}
+const pts = [new THREE.Vector2(0,0), new THREE.Vector2(0.25,0)];
+const N = 90;
+for(let i=0;i<=N;i++){const t=i/N; pts.push(new THREE.Vector2(Rp(t), t*H));}
+// borde pulido: semicírculo que une la pared exterior con la interior
+const CAPN=6, cr=0.045, rc=Rp(1)-cr;
+for(let k=1;k<=CAPN;k++){ const th=Math.PI*k/(CAPN+1); pts.push(new THREE.Vector2(rc+cr*Math.cos(th), H+cr*Math.sin(th))); }
+for(let i=N;i>=3;i--){const t=i/N; pts.push(new THREE.Vector2(Math.max(0.05,Rp(t)-0.09), t*H));}
+pts.push(new THREE.Vector2(0.2,0.14), new THREE.Vector2(0,0.14));
+const geo = new THREE.LatheGeometry(pts, SEG);
+const orig = geo.attributes.position.array.slice();      // forma base (se actualiza al pausar)
+const basePos = orig.slice();                            // lathe puro, sin irregularidad
+const tOrig = new Float32Array(orig.length/3);           // altura normalizada original de cada vértice
+for(let i=0;i<tOrig.length;i++) tOrig[i] = orig[i*3+1]/H;
+// Modelado artesanal sobrio: leve irregularidad + anillo de cuentas e incisuras en el cuello
+const HAND = 0.35;                       // 0 = torno perfecto · 1 = muy artesanal
+const hn = (ix,iy,iz)=>{ let h=(Math.imul(ix,374761393)+Math.imul(iy,668265263)+Math.imul(iz,1274126177))|0;
+  h=Math.imul(h^(h>>>13),1274126177); return ((h^(h>>>16))>>>0)/4294967295; };
+const vn3 = (x,y,z)=>{
+  const xi=Math.floor(x), yi=Math.floor(y), zi=Math.floor(z), fx=x-xi, fy=y-yi, fz=z-zi;
+  const sf=f=>f*f*(3-2*f), l=(a,b,t)=>a+(b-a)*t, c=(dx,dy,dz)=>hn(xi+dx,yi+dy,zi+dz);
+  const sx=sf(fx), sy=sf(fy), sz=sf(fz);
+  return l(l(l(c(0,0,0),c(1,0,0),sx), l(c(0,1,0),c(1,1,0),sx), sy),
+           l(l(c(0,0,1),c(1,0,1),sx), l(c(0,1,1),c(1,1,1),sx), sy), sz);
+};
+const nPts = pts.length, nOuter = N+3;   // los primeros nOuter puntos del perfil son la pared exterior
+function handForm(){
+  orig.set(basePos);
+  dents.length = 0;
+  for(let k=0;k<4;k++) dents.push({phi:Math.random()*6.2832, t:.2+Math.random()*.55, a:-(0.03+Math.random()*0.02)});
+  const ho=[Math.random()*50,Math.random()*50,Math.random()*50,Math.random()*50], ov=Math.random()*3;
+  for(let i=0;i<orig.length/3;i++){
+    const ox=orig[i*3], oz=orig[i*3+2], r=Math.hypot(ox,oz);
+    if(r<1e-4) continue;
+    const t=tOrig[i], phi=Math.atan2(ox,oz), sn=Math.sin(phi), cs=Math.cos(phi);
+    let f = 1;
+    f += HAND*0.032*(vn3(cs*1.3+ho[0], t*3.2, sn*1.3+ho[1])*2-1);                                  // abultamientos orgánicos
+    f += HAND*0.03*Math.cos(2*(phi-ov))*(0.4+t*0.6);                                      // leve ovalado
+    f += HAND*0.017*Math.sin(t*Math.PI*2*9 + 1.1*Math.sin(phi+ov) + 2*vn3(cs+ho[2],t*2,sn+ho[3])); // uniones de rollos
+    for(const d of dents){
+      let dp=phi-d.phi; dp=Math.atan2(Math.sin(dp),Math.cos(dp)); const dt=t-d.t;
+      f += HAND*d.a*Math.exp(-(dp*dp)/(2*0.3*0.3)-(dt*dt)/(2*0.065*0.065));
+    }
+    if((i % nPts) < nOuter){                                                               // solo pared exterior
+      const gb=Math.exp(-((t-0.84)*(t-0.84))/(2*0.016*0.016));                              // fila de cuentas
+      f += 0.02*gb*(0.35+0.65*Math.pow(0.5+0.5*Math.cos(phi*48),2));
+      const gi=Math.exp(-((t-0.78)*(t-0.78))/(2*0.012*0.012));                              // fila de incisuras
+      f -= 0.014*gi*Math.pow(0.5+0.5*Math.cos(phi*60),3);
+    }
+    orig[i*3]*=f; orig[i*3+2]*=f;
+  }
+}
+handForm();
+const origInit = orig.slice();                           // forma original de arcilla
+function newParams(){ return {k1:6+Math.floor(Math.random()*14), k2:10+Math.random()*30, k3:2+Math.floor(Math.random()*8), m1:1+Math.random()*2.5, ph:Math.random()*6.28}; }
+let P = {k1:14, k2:26, k3:5, m1:2, ph:0};
+let paused = false;
+
+const clay = buildClay(N, pts.length);
+const clayU = {
+  uBackV:{value:new THREE.Vector3(0,0,-1)}, uBackCol:{value:new THREE.Color(0xff9a5a)}, uUpV:{value:new THREE.Vector3(0,1,0)}
+};
+const mat = new THREE.MeshPhysicalMaterial({
+  map:clay.map, bumpMap:clay.bump, bumpScale:0.006,   // relieve ultra fino, solo con luz rasante
+  roughness:0.88, metalness:0.0, envMapIntensity:0.65,
+  side:THREE.DoubleSide
+});
+mat.onBeforeCompile = sh => {
+  Object.assign(sh.uniforms, clayU);
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>','#include <common>\nvarying float vObjY;')
+    .replace('#include <begin_vertex>','#include <begin_vertex>\nvObjY = position.y;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>',`#include <common>
+uniform vec3 uBackV; uniform vec3 uBackCol; uniform vec3 uUpV; varying float vObjY;`)
+    .replace('#include <tonemapping_fragment>',`{
+  vec3 Nn = normalize(normal); vec3 Vv = normalize(vViewPosition); vec3 Ls = normalize(uBackV);
+  float ndv = clamp(dot(Nn,Vv),0.0,1.0);
+  float edge = pow(1.0-ndv,1.5);
+  float neck = smoothstep(0.55,0.95,vObjY/2.2);
+  // dispersión subsuperficial: luz que atraviesa borde, cuello y zonas finas
+  vec3 Hh = normalize(Ls + Nn*0.35);
+  float trans = pow(clamp(dot(-Vv,Hh),0.0,1.0),3.0);
+  float thick = 0.25*edge + 0.75*neck*(0.5+0.5*edge);
+  gl_FragColor.rgb += uBackCol*vec3(1.0,0.42,0.16)*trans*thick*diffuseColor.rgb*2.2;
+  // sheen: halo de polvo cerámico en ángulos tangenciales
+  float sh = pow(1.0-ndv,3.0)*(0.3+0.7*clamp(dot(Nn,Ls)*0.5+0.5,0.0,1.0));
+  gl_FragColor.rgb += vec3(0.92,0.70,0.56)*sh*0.32;
+}
+#include <tonemapping_fragment>`);
+};
+mat.customProgramCacheKey = () => 'voces-arcilla-v1';
+const vase = new THREE.Mesh(geo, mat);
+vase.castShadow = true; vase.receiveShadow = true;
+// Eje desviado ~1.8°: masa moldeada a mano que cede bajo su propio peso
+const tilt = new THREE.Group();
+tilt.position.y = -1.121;   // sobre la cara superior del plato de barro
+tilt.rotation.set(THREE.MathUtils.degToRad(0.8*HAND), 0, THREE.MathUtils.degToRad(1.6*HAND));
+tilt.add(vase);
+scene.add(tilt);
+// Plato de barro cocido sobre el que se levanta la pieza (como en el video)
+const plate = new THREE.Mesh(new THREE.CylinderGeometry(.98,1.02,.03,64),
+  new THREE.MeshStandardMaterial({color:0xb8693f, roughness:.9, metalness:0, envMapIntensity:.4}));
+plate.position.y = -1.136; plate.castShadow = true; plate.receiveShadow = true;
+scene.add(plate);
+geo.attributes.position.array.set(orig); geo.attributes.position.needsUpdate = true; geo.computeVertexNormals();
+
+// ---------- Audio ----------
+let actx, analyser, freq, micOn = false, micNode = null, micStream = null, playing = false, micP = null;
+const S = {low:0, mid:0, high:0, vol:0};           // valores suavizados 0..1
+
+function setStatus(msg, err){
+  const s = $('status');
+  s.textContent = msg;
+  s.style.opacity = err ? 1 : .7;
+  s.style.color = err ? '#ffb48a' : '';
+  s.style.maxWidth = '32%';
+}
+function ensureAudio(){                 // un solo contexto + analizador: sirven al micrófono y a la reproducción
+  if(!actx){
+    actx = new (window.AudioContext||window.webkitAudioContext)();
+    analyser = actx.createAnalyser(); analyser.fftSize = 4096; analyser.smoothingTimeConstant = 0.4;
+    freq = new Uint8Array(analyser.frequencyBinCount);
+    document.addEventListener('click', () => { if(actx.state==='suspended') actx.resume(); });
+  }
+  return actx.state==='suspended' ? actx.resume() : Promise.resolve();
+}
+function ensureMic(){ if(micOn) return Promise.resolve(); return micP || (micP = startMic().finally(()=>{ micP=null; })); }
+async function startMic(){
+  try{
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      throw {name:'Insecure', message:'El navegador bloquea el micrófono en este contexto. Abre el archivo desde http://localhost o https:// (no dentro de una vista previa/iframe).'};
+    }
+    setStatus('Solicitando permiso de micrófono…');
+    await ensureAudio();
+
+    let stream;
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    }catch(e1){
+      stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    }
+    micStream = stream; micNode = actx.createMediaStreamSource(stream);
+    if(!playing) micNode.connect(analyser);   // sin conectar a destination: evita eco
+    micOn = true;
+    $('start').style.display = 'none';
+    $('pause').style.display = 'block';
+    const label = stream.getAudioTracks()[0] ? stream.getAudioTracks()[0].label : 'micrófono';
+    setStatus('Micrófono activo: ' + label + ' — habla, canta o silba');
+  }catch(e){
+    const n = e && e.name;
+    let msg = 'No se pudo acceder al micrófono: ' + (e && e.message ? e.message : e);
+    if(n==='NotAllowedError' || n==='SecurityError') msg = 'Permiso denegado. Pulsa el icono del candado en la barra de direcciones, permite el micrófono y recarga la página.';
+    else if(n==='NotFoundError' || n==='OverconstrainedError') msg = 'No se encontró ningún micrófono. Conecta uno y revisa la entrada de sonido del sistema.';
+    else if(n==='NotReadableError') msg = 'El micrófono está en uso por otra aplicación (Zoom, Meet, etc.). Ciérrala e inténtalo de nuevo.';
+    setStatus(msg, true);
+    console.error('Error de micrófono:', e);
+  }
+}
+function kickoff(fast){                  // levanta la vasija con las manos si todavía no se ha hecho
+  if(B.phase==='ready') startBuild(fast || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches));
+}
+$('start').onclick = () => { kickoff(false); ensureMic(); };
+
+// ---------- Análisis de voz y sonido ----------
+// Cada banda se mide en dB y se compara con su propia media lenta: lo que mueve la vasija es cuánto cambia el sonido
+// (ataques, vocales, consonantes) y no solo cuánto suena. Así una canción densa y fuerte no deja todo al máximo.
+// Además: tono (pitch), vocales (formantes), sibilancia y ataques, para que la voz tenga forma propia.
+const BANDS = [[40,140],[140,400],[400,1000],[1000,2500],[2500,5000],[5000,12000]];
+const VF = {pn:0, conf:0, f1:.5, f2:.5, sib:0, hz:0};            // rasgos de voz que usa la deformación
+const AN = {ready:false, frame:0};
+const clamp01 = x => x<0 ? 0 : x>1 ? 1 : x;
+const sm01 = (a,b,x) => { x=clamp01((x-a)/(b-a)); return x*x*(3-2*x); };
+function anInit(){
+  const N=analyser.fftSize, nb=analyser.frequencyBinCount, sr=actx.sampleRate, bh=sr/N;
+  Object.assign(AN,{N,nb,sr,bh,db:new Float32Array(nb),prev:new Float32Array(nb).fill(-140),pw:new Float32Array(nb),td:new Float32Array(N),
+    kmax:Math.min(nb-1,Math.round(12000/bh)), bins:BANDS.map(([a,b])=>[Math.max(1,Math.round(a/bh)),Math.min(nb-1,Math.round(b/bh))]),
+    s:new Float32Array(6).fill(-100), m:new Float32Array(6).fill(-100), L:-100, mL:-100, nf:-60, fm:1, hz:0, pconf:0, voiced:false,
+    pn:0, pnT:0, conf:0, f1:.5, f2:.5, sib:0, ds:new Float32Array(1024), pre:new Float32Array(1025), nr:null, t:performance.now()/1000, ready:true});
+}
+function anPitch(){
+  const N=AN.N, M=1024, ds=AN.ds, o=N-2048; let mean=0;
+  for(let i=0;i<M;i++){ ds[i]=.5*(AN.td[o+2*i]+AN.td[o+2*i+1]); mean+=ds[i]; } mean/=M;
+  for(let i=0;i<M;i++) ds[i]-=mean;
+  const sr2=AN.sr/2, lmin=Math.max(2,Math.floor(sr2/1000)), lmax=Math.min(M-3,Math.floor(sr2/70));
+  if(!AN.nr || AN.nr.length<lmax+3) AN.nr=new Float32Array(lmax+3);
+  const pre=AN.pre, nr=AN.nr; pre[0]=0; for(let i=0;i<M;i++) pre[i+1]=pre[i]+ds[i]*ds[i];
+  let best=0, bestLag=lmin;
+  for(let lag=lmin;lag<=lmax;lag++){
+    let r=0; const L=M-lag; for(let i=0;i<L;i++) r+=ds[i]*ds[i+lag];
+    const v=r/Math.sqrt(pre[L]*(pre[M]-pre[lag])+1e-12); nr[lag]=v; if(v>best){ best=v; bestLag=lag; } }
+  let pick=bestLag;                                              // primer pico alto: evita saltos de octava
+  for(let lag=lmin+1;lag<lmax;lag++){ if(nr[lag]>.9*best && nr[lag]>=nr[lag-1] && nr[lag]>=nr[lag+1]){ pick=lag; break; } }
+  const a=nr[pick-1], b=nr[pick], c=nr[pick+1], den=a-2*b+c, off=den!==0 ? .5*(a-c)/den : 0;
+  AN.hz=sr2/(pick+off); AN.pconf=nr[pick];
+}
+function anProcess(){
+  const now=performance.now()/1000, dt=Math.min(.1,Math.max(.001,now-AN.t)); AN.t=now;
+  analyser.getFloatFrequencyData(AN.db); analyser.getFloatTimeDomainData(AN.td);
+  const db=AN.db, pw=AN.pw, N=AN.N, kd=k=>1-Math.exp(-dt/k);
+  // nivel global y compuerta adaptativa (piso de ruido entre -68 y -52 dB)
+  let sq=0; for(let i=N-2048;i<N;i++){ const v=AN.td[i]; sq+=v*v; }
+  const Ldb=10*Math.log10(sq/2048+1e-12);
+  AN.nf=Math.min(Ldb,AN.nf+dt*1.5); const nfc=Math.max(-68,Math.min(-52,AN.nf));
+  const gate=sm01(nfc+5,nfc+13,Ldb);
+  for(let i=1;i<=AN.kmax;i++) pw[i]=Math.pow(10,Math.max(-140,db[i])/10);
+  // seis bandas: absoluto (acotado) + relativo a su media lenta
+  const y=new Array(6), Pb=new Array(6);
+  for(let b=0;b<6;b++){
+    const [i0,i1]=AN.bins[b]; let p=0; for(let i=i0;i<=i1;i++) p+=pw[i];
+    const bd=10*Math.log10(p/(i1-i0+1)+1e-14); Pb[b]=bd;
+    AN.s[b]+=(bd-AN.s[b])*kd(bd>AN.s[b]?.03:.12);
+    AN.m[b]+=(AN.s[b]-AN.m[b])*kd(AN.s[b]>AN.m[b]?1.2:5);
+    const abs=clamp01((AN.s[b]+80)/60), rel=1/(1+Math.exp(-(AN.s[b]-AN.m[b])/3.2));
+    y[b]=clamp01(.35*Math.pow(abs,1.3)+.65*rel)*gate;
+  }
+  // volumen: igual, absoluto + relativo
+  AN.L+=(Ldb-AN.L)*kd(Ldb>AN.L?.04:.15); AN.mL+=(AN.L-AN.mL)*kd(AN.L>AN.mL?1.2:5);
+  const vol=clamp01(.35*Math.pow(clamp01((AN.L+62)/50),1.2)+.65/(1+Math.exp(-(AN.L-AN.mL)/2.8)))*gate;
+  // ataques (flujo espectral) y brillo (centroide)
+  const k0=Math.max(2,Math.round(100/AN.bh)), k1=Math.min(AN.nb-1,Math.round(8000/AN.bh)); let fl=0, cs=0, ws=0;
+  for(let i=k0;i<=k1;i++){ const d=db[i]>-140?db[i]:-140; if(d>-75 && d>AN.prev[i]) fl+=d-AN.prev[i]; AN.prev[i]=d; cs+=i*AN.bh*pw[i]; ws+=pw[i]; }
+  const rawFl=fl/(k1-k0+1); AN.fm+=(rawFl-AN.fm)*kd(.5);
+  const flux=clamp01((rawFl-AN.fm*1.3)/5)*gate;
+  const cent=ws>0 ? clamp01((Math.log2(Math.max(100,cs/ws))-Math.log2(300))/(Math.log2(4000)-Math.log2(300))) : .3;
+  // tono (cada dos fotogramas) → posición del abultamiento; confianza de voz
+  if((AN.frame++&1)===0){
+    anPitch(); AN.voiced = AN.pconf>.6 && gate>.5 && AN.hz>70 && AN.hz<1000;
+    if(AN.voiced){
+      let h=AN.hz; const hs=AN.hzS||0;
+      if(hs>0){ const r=h/hs; if(r>1.8 && r<2.2) h/=2; else if(r>.45 && r<.56) h*=2; }                    // errores de octava
+      if(hs>0 && Math.abs(Math.log2(h/hs))>.4){ AN.jump=(AN.jump||0)+1; if(AN.jump<4) h=hs; else { AN.hzS=h; AN.jump=0; } } else AN.jump=0;   // salto real: 4 confirmaciones
+      AN.hzS = AN.hzS>0 ? AN.hzS*.6+h*.4 : h; AN.unv=0;
+      AN.pnT=clamp01((Math.log2(AN.hzS)-Math.log2(80))/(Math.log2(1000)-Math.log2(80)));
+    }else if((AN.unv=(AN.unv||0)+1)>8) AN.hzS=0;
+  }
+  AN.pn+=(AN.pnT-AN.pn)*kd(.05);
+  AN.conf+=((AN.voiced ? Math.min(1,(AN.pconf-.5)*2.2) : 0)-AN.conf)*kd(AN.voiced?.04:.15);
+  // vocales: centroides de las zonas de F1 y F2 (solo cuando hay voz)
+  const cen=(f0,f1)=>{ const a=Math.round(f0/AN.bh), b=Math.round(f1/AN.bh); let s=0,w=0; for(let i=a;i<=b;i++){ s+=i*AN.bh*pw[i]; w+=pw[i]; } return w>0 ? s/w : (f0+f1)/2; };
+  if(AN.conf>.3){ AN.f1+=(clamp01((cen(250,1000)-350)/500)-AN.f1)*kd(.08); AN.f2+=(clamp01((cen(1000,3000)-1100)/1500)-AN.f2)*kd(.08); }
+  else { AN.f1+=(.5-AN.f1)*kd(.4); AN.f2+=(.5-AN.f2)*kd(.4); }
+  // sibilancia: aire (5–12 kHz) casi tan fuerte como la zona de F2, sin tono
+  AN.sib+=(sm01(-16,-4,Pb[5]-Pb[3])*gate*(1-.6*AN.conf)-AN.sib)*kd(.03);
+  return {low:Math.max(y[0],y[1]), mid:Math.max(y[2],y[3]), high:Math.max(y[4],y[5]), vol, flux, cent, pn:AN.pn, conf:AN.conf, f1:AN.f1, f2:AN.f2, sib:AN.sib, hz:AN.voiced?(AN.hzS||AN.hz):0};
+}
+function analyse(){
+  if(!micOn && !playing){ // respiración suave en reposo
+    const t = performance.now()/1000;
+    return {low:.06+.04*Math.sin(t*.7), mid:.05+.03*Math.sin(t*.5+1), high:.03, vol:.05, flux:0, cent:.3, pn:0, conf:0, f1:.5, f2:.5, sib:0, hz:0};
+  }
+  if(!AN.ready) anInit();
+  return anProcess();
+}
+
+// ---------- Ruido 3D (Perlin mejorado) ----------
+const _pm = new Uint8Array(512);
+(function(){ const a=[]; for(let i=0;i<256;i++) a.push(i);
+  for(let i=255;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=a[i]; a[i]=a[j]; a[j]=t; }
+  for(let i=0;i<512;i++) _pm[i]=a[i&255]; })();
+const _fd=t=>t*t*t*(t*(t*6-15)+10), _lr=(a,b,t)=>a+t*(b-a);
+const _gr=(h,x,y,z)=>{ h&=15; const u=h<8?x:y, v=h<4?y:(h===12||h===14?x:z); return ((h&1)?-u:u)+((h&2)?-v:v); };
+function noise3(x,y,z){
+  const X=Math.floor(x)&255, Y=Math.floor(y)&255, Z=Math.floor(z)&255;
+  x-=Math.floor(x); y-=Math.floor(y); z-=Math.floor(z);
+  const u=_fd(x), v=_fd(y), w=_fd(z);
+  const A=_pm[X]+Y, AA=_pm[A]+Z, AB=_pm[A+1]+Z, B=_pm[X+1]+Y, BA=_pm[B]+Z, BB=_pm[B+1]+Z;
+  return _lr(_lr(_lr(_gr(_pm[AA],x,y,z),_gr(_pm[BA],x-1,y,z),u), _lr(_gr(_pm[AB],x,y-1,z),_gr(_pm[BB],x-1,y-1,z),u), v),
+              _lr(_lr(_gr(_pm[AA+1],x,y,z-1),_gr(_pm[BA+1],x-1,y,z-1),u), _lr(_gr(_pm[AB+1],x,y-1,z-1),_gr(_pm[BB+1],x-1,y-1,z-1),u), v), w);
+}
+const gauss = (x,w) => Math.exp(-(x*x)/(w*w));
+const smooth01 = (a,b,x)=>{x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x)};
+
+// ---------- Estado dinámico: la fase, la torsión y la escala del ruido mutan con el audio ----------
+const D = {off:[0,0,0], offT:[0,0,0], ph:0, phv:0.4, nsc:1, twist:0, trend:0, cent:.3, flux:0, prevFlux:0, lastPulse:-9, pulses:[], t0:0};
+function reseedDyn(){ for(let i=0;i<3;i++){ D.off[i]=D.offT[i]=Math.random()*40; } D.pulses.length=0; D.twist=0; D.trend=0; D.ph=Math.random()*10; }
+reseedDyn();
+function updateDyn(time, raw){
+  const dt = Math.min(.05, Math.max(.001, time-D.t0)); D.t0 = time;
+  const fl = raw.flux||0, ce = raw.cent||.3;
+  D.trend += ((ce-D.cent)*14 - D.trend)*Math.min(1,dt*8);             // tendencia del tono: sube / baja
+  D.cent  += (ce-D.cent)*Math.min(1,dt*6);
+  const dir = Math.tanh(D.trend*2.5);                                  // + horario · − antihorario
+  D.flux  += (fl-D.flux)*Math.min(1,dt*18);
+  const want = (dir>=0?1:-1)*(0.35+3*D.flux+1.5*S.high);              // la fase avanza o retrocede con el tono
+  D.phv += (want-D.phv)*Math.min(1,dt*4); D.ph += dt*D.phv;
+  D.nsc += ((0.8+1.6*Math.min(1,D.cent*2)) - D.nsc)*Math.min(1,dt*3);  // tono agudo → rasgos más finos
+  if(fl>.32 && fl>D.prevFlux+.08 && time-D.lastPulse>.1){              // transitorio → anillo que sube por la pared
+    D.lastPulse = time;
+    D.pulses.push({t0:time, amp:.35+.65*Math.min(1,fl)+S.vol*.3, w:.1+Math.random()*.1, sp:.7+Math.random()*.5+S.vol*.5, s:Math.random()*40});
+    if(D.pulses.length>8) D.pulses.shift();
+    for(let i=0;i<3;i++) D.offT[i] += (Math.random()-.5)*(2+4*fl);   // el patrón salta a otra región del ruido
+  }
+  D.prevFlux = fl;
+  D.pulses = D.pulses.filter(p=>(time-p.t0)*p.sp<1.4 && time-p.t0<3);
+  for(let i=0;i<3;i++) D.off[i] += (D.offT[i]-D.off[i])*Math.min(1,dt*2.5);
+}
+
+// ---------- Deformación ----------
+const pos = geo.attributes.position;
+function deform(time){
+  const a = 0.2 + S.vol*1.25;                           // intensidad general
+  const L = S.low*a, M = S.mid*a, Hh = S.high*a*(1+.6*VF.sib);   // las sibilantes (s, ch, t) agudizan los pliegues
+  const vc = Math.min(1, VF.conf*S.vol*1.2), tp = .12+.78*VF.pn, f1d = VF.f1-.5, f2d = VF.f2-.5, rot = D.ph*.7;
+  const g = 1 + S.low*0.08 + S.vol*0.04;                // escala global
+  const o = D.off, ph = D.ph, ns = D.nsc;
+  const lx = L*0.45*noise3(o[0]+ph*.25, 1.3, o[2]);     // graves: el eje se inclina de forma orgánica
+  const lz = L*0.45*noise3(o[0]+7.1, 4.2+ph*.25, o[1]);
+  const waveK = 6+6*ns, waveSp = 2.2+4*D.flux, hs = 5*ns, pulses = D.pulses;
+  for(let i=0;i<pos.count;i++){
+    const ox=orig[i*3], oy=orig[i*3+1], oz=orig[i*3+2];
+    const t=tOrig[i], r=Math.hypot(ox,oz);
+    const cs = r>1e-4 ? ox/r : 1, sn = r>1e-4 ? oz/r : 0, axisW = Math.min(1, r*3);
+    // El ruido se muestrea sobre (ángulo, altura), no sobre el radio: pared interior y exterior reciben el mismo
+    // desplazamiento, así el grosor se conserva y la superficie no se cruza.
+    let f = 1, add = 0, yAdd = 0;
+    if(L>.01){                                          // GRAVES: bultos grandes y asimétricos (2 octavas)
+      const q = noise3(cs*.9*ns+o[0], t*1.1+o[1]+ph*.2, sn*.9*ns+o[2]) + .5*noise3(cs*1.8*ns+o[2], t*2.2+o[0], sn*1.8*ns+o[1]-ph*.3);
+      f += L*.35*q + L*.28*(1-t)*(1-t)*(1+.6*q);
+    }
+    if(M>.01){                                          // MEDIOS: ondas verticales que suben + asimetría
+      const wn = noise3(cs*ns+o[1], t*2+o[2], sn*ns+o[0]+ph*.4);
+      f += M*.16*Math.sin(t*waveK - time*waveSp + 2.2*wn);
+      yAdd += M*.06*wn;
+    }
+    for(let k=0;k<pulses.length;k++){                   // IMPULSOS: anillos de deformación base → boca
+      const p=pulses[k], age=time-p.t0, d=t-(age*p.sp-.05);
+      const ring = Math.exp(-(d*d)/(2*p.w*p.w))*p.amp*Math.exp(-age*.6);
+      if(ring>.002) f += ring*.22*(1+.7*noise3(cs*1.5+p.s, t*3-age*2, sn*1.5+p.s*.3));
+    }
+    if(vc>.02){                                         // VOZ: el tono sube por la pared; la vocal moldea vientre (F1) y cuello (F2)
+      const asym = 1+.5*(cs*Math.cos(rot)+sn*Math.sin(rot));
+      f += vc*(.2*gauss(t-tp,.11)*asym + f1d*.26*gauss(t-.42,.22) + f2d*.22*gauss(t-.78,.1));
+    }
+    if(Hh>.01){                                         // AGUDOS: micro-ruido, pliegues y pellizcos en el borde
+      const n1 = noise3(cs*hs+o[0], t*hs*1.2+o[1]-ph*.8, sn*hs+o[2]);
+      const n2 = noise3(cs*hs*2.1+o[2], t*hs*2.3+o[0]+ph, sn*hs*2.1+o[1]);
+      add += Hh*(.035*n1 + .02*n2 + .025*((1-Math.abs(n1))-.5))*(.3+t)*axisW;
+      const rim = smooth01(.8,1,t);
+      if(rim>0){
+        add  += Hh*rim*.06*noise3(cs*3+o[1], t*6+o[0], sn*3+o[2]+ph)*axisW;
+        yAdd += Hh*rim*.05*noise3(cs*4+o[2], o[0], sn*4+ph);
+      }
+    }
+    f = Math.min(1.5, Math.max(.65, f));                // límites: volumen estable y malla imprimible
+    const R = r*f + add;
+    const x = cs*R, z = sn*R, y = oy*(1+Math.min(.28,M*.25)) + yAdd, lw = t*t;
+    pos.setXYZ(i, (x + lx*lw)*g, y*g, (z + lz*lw)*g);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
+// ================== CONSTRUCCIÓN A MANO · ROLLO TINAJERO ==================
+// Basada en el video de una alfarera de Juana Sánchez: una mano DENTRO de la pieza y otra FUERA,
+// cordones gruesos de arcilla arenosa asentados anillo a anillo y apretados entre las dos manos.
+const V3 = THREE.Vector3, TAU = Math.PI*2;
+const K = 11, RES = 0.012, PEAK = 0.06, WD = 0.5, Y0 = tilt.position.y, HS = 0.9;
+const B = {phase:'ready', dirty:true, time:0, t0:-.9, Tc:1.3, ring:0, outroT:0, last:0, OUTRO:.9,
+  st:{kk:0,lay:0,tbPrev:0,tbNext:0,phi0:0}, tbc:new Float32Array(SEG+1), ringAmp:new Float32Array(K)};
+const phi0For = k => (0.4 + k*2.3) % TAU;                    // el cordón de cada anillo arranca en otro punto
+const Gs = s => s - 0.7/TAU*Math.sin(TAU*s);                 // barrido lento por delante, rápido por detrás
+
+// Anillo al que pertenece cada vértice de la pared exterior y forma del cordón (abultado al centro)
+const ptsX = pts.map(p=>p.x), ptsY = pts.map(p=>p.y);
+const vk = new Uint8Array(pos.count).fill(255), vb = new Float32Array(pos.count);
+for(let i=0;i<pos.count;i++){ const j=i%nPts;
+  if(j>=2 && j<nOuter){ const t=(j-2)/N, k=Math.min(K-1,Math.floor(t*K)); vk[i]=k; vb[i]=Math.pow(Math.sin(Math.PI*(t*K-k)),1.2); } }
+
+// La pared crece por anillos: cada columna tiene su propia altura mientras el cordón se asienta alrededor
+function applyBuild(){
+  const st = B.st;
+  for(let c=0;c<=SEG;c++){
+    if(st.kk<=0) B.tbc[c]=0;
+    else if(st.kk>K) B.tbc[c]=1;
+    else{
+      const psi = ((((c%SEG)*TAU/SEG - st.phi0)%TAU)+TAU)%TAU;
+      B.tbc[c] = st.tbPrev + (st.tbNext-st.tbPrev)*smooth01(0,1,(Gs(st.lay)*(TAU+WD)-psi)/WD);
+    }
+  }
+  for(let i=0;i<pos.count;i++){
+    const c=(i/nPts)|0, j=i-c*nPts, tb=B.tbc[c];
+    let x=orig[i*3], y=orig[i*3+1], z=orig[i*3+2], col=false;
+    if(tb<1){
+      const tE=Math.max(tb,.028), t=tOrig[i], px=ptsX[j], py=ptsY[j];     // .028 → base de arcilla de ~6 cm
+      let qx=px, qy=py;
+      if(j<nOuter){ if(j>=2 && t>tE){ qx=Rp(tE); qy=tE*H; col=true; } }
+      else if(j<nOuter+CAPN){ const u=(1-Math.cos(Math.PI*(j-nOuter+1)/(CAPN+1)))/2; qx=Rp(tE)-.09*u; qy=tE*H+(py-H)*smooth01(.92,1,tb); col=true; }
+      else if(t>tE){ qx=Math.max(.05,Rp(tE)-.09); qy=tE*H; col=true; }
+      if(col){ const rho=px>1e-3?qx/px:1, ys=py>1e-4?qy/py:1; x*=rho; z*=rho; y*=ys; }
+    }
+    if(!col && vk[i]<255){ const f=1+B.ringAmp[vk[i]]*vb[i]; x*=f; z*=f; }
+    pos.setXYZ(i,x,y,z);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+// Al terminar, las juntas quedan como una huella suave en la pared (se hornean en la forma base)
+function finishBuild(){
+  for(let i=0;i<vk.length;i++) if(vk[i]<255){ const f=1+RES*vb[i]; orig[i*3]*=f; orig[i*3+2]*=f; }
+  origInit.set(orig);
+  pos.array.set(orig); pos.needsUpdate = true; geo.computeVertexNormals();
+}
+
+// ---------- Manos de arcilla: antebrazo y palma modelados como una sola superficie continua, dedos que se doblan y LA MISMA arcilla de la vasija ----------
+// Mismo mapa de color, mismo relieve y mismo shader (SSS + sheen) que la pieza: cuando toman barro, quedan de su tonalidad.
+const clayTex = (src, rx, ry, ox, oy) => { const t=src.clone(); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(rx,ry); t.offset.set(ox,oy); t.needsUpdate=true; return t; };
+function clayMat(rx, ry, o, vc){
+  const m = new THREE.MeshPhysicalMaterial({map:clayTex(clay.map,rx,ry,o[0],o[1]), bumpMap:clayTex(clay.bump,rx,ry,o[0],o[1]), bumpScale:.006,
+    roughness:.88, metalness:0, envMapIntensity:.65, side:THREE.DoubleSide, vertexColors:!!vc});
+  m.onBeforeCompile = mat.onBeforeCompile; m.customProgramCacheKey = mat.customProgramCacheKey;
+  return m;
+}
+const handMat = clayMat(.12,.12,[.3,.4],true);   // vertexColors = oclusión ambiental pintada en pliegues y entre dedos
+const nailMat = new THREE.MeshStandardMaterial({color:0xd8a58c, roughness:.5, metalness:0, envMapIntensity:.5});
+const nailGeo = new THREE.SphereGeometry(1,12,8);
+const gb = (x,w) => Math.exp(-(x*x)/(w*w));                                   // campana
+const sm3 = (a,b,x) => { x=Math.min(1,Math.max(0,(x-a)/(b-a))); return x*x*(3-2*x); };
+const easeJ = x => { x=Math.min(1,Math.max(0,(x+1)/2)); return x*x*(3-2*x); };
+
+// Dedo = tubo continuo (24 anillos × 20 lados): punta redondeada, nudillos, pliegues en la palma, base ensanchada
+// que se funde con la palma como membrana entre dedos, y oclusión pintada en los vértices.
+const FA = 20, NB = 16, NPRE = 2, NCAP = 5, FR = NPRE+NB+NCAP;
+function fingerRig(def){
+  const L=def.len, cap=def.r*1.1, sArr=[-.06,-.03], capSc=new Float32Array(FR+1).fill(1);
+  for(let i=0;i<=NB;i++) sArr.push((L-cap)*i/NB);
+  for(let k=1;k<=NCAP;k++){ const th=k/NCAP*Math.PI/2; sArr.push(L-cap+cap*Math.sin(th)); capSc[NPRE+NB+k]=Math.cos(th); }
+  const geo=new THREE.BufferGeometry(), nV=(FR+1)*(FA+1), posA=new Float32Array(nV*3), colA=new Float32Array(nV*3).fill(1), uvA=new Float32Array(nV*2), idx=[];
+  for(let r=0;r<=FR;r++) for(let a=0;a<=FA;a++){ const v=r*(FA+1)+a; uvA[v*2]=a/FA; uvA[v*2+1]=r/FR; }
+  for(let r=0;r<FR;r++) for(let a=0;a<FA;a++){ const i0=r*(FA+1)+a, i1=i0+1, i2=i0+FA+1, i3=i2+1; idx.push(i0,i2,i1, i1,i2,i3); }
+  geo.setIndex(idx); geo.setAttribute('position',new THREE.BufferAttribute(posA,3)); geo.setAttribute('color',new THREE.BufferAttribute(colA,3)); geo.setAttribute('uv',new THREE.BufferAttribute(uvA,2));
+  const mesh=new THREE.Mesh(geo,handMat); mesh.frustumCulled=false;
+  const nail=new THREE.Mesh(nailGeo,nailMat); nail.scale.set(def.r*.55,def.r*.24,def.r*.78); mesh.add(nail);
+  return {def, sArr, capSc, geo, mesh, posA, colA, nail};
+}
+function updateFinger(f, a1, a2, a3){
+  const d=f.def, L=d.len, two=d.joints.length>1, j1=d.joints[0]*L, j2=two?d.joints[1]*L:1e9, w=.05, FA1=FA+1;
+  const phi = s => a1 + a2*easeJ((s-j1)/w) + (two ? a3*easeJ((s-j2)/w) : 0);
+  let py=0, pz=-.06, sPrev=f.sArr[0], tipY=0, tipZ=0, tipPhi=0, tipR=0;
+  for(let m=0;m<=FR;m++){
+    const s=f.sArr[m];
+    if(m>0){ const ph=phi((s+sPrev)/2), ds=s-sPrev; py-=Math.sin(ph)*ds; pz+=Math.cos(ph)*ds; }
+    sPrev=s;
+    const phiM=phi(s), cs=Math.cos(phiM), sn=Math.sin(phiM), t=Math.min(1,Math.max(0,s/L));
+    let R=d.r*(1.1-.3*t)*(1+(d.base||0)*gb(s,.12));
+    R*=1+.07*gb(s-j1,.035)+(two?.07*gb(s-j2,.035):0);                              // nudillos
+    R*=f.capSc[m];
+    const xs=1+(d.flare||0)*gb(s+.01,.06);                                          // base ancha: membrana entre dedos
+    const crease=gb(s-j1,.012)+(two?gb(s-j2,.012):0);
+    for(let a=0;a<=FA;a++){
+      const al=a/FA*TAU, ca=Math.cos(al), sa=Math.sin(al);
+      const rr = sa>0 ? R*(1-.09*crease*sa) : R;                                    // pliegues del lado de la palma
+      const v=(m*FA1+a)*3;
+      f.posA[v]=rr*ca*xs; f.posA[v+1]=py-cs*rr*sa*.86; f.posA[v+2]=pz-sn*rr*sa*.86;
+      const ao = 1 - .3*crease*Math.max(0,sa) - (d.web||0)*gb(s-.02,.06)*Math.abs(ca);   // oscurece pliegues y entre dedos
+      const c=Math.max(.45,Math.min(1,ao)); f.colA[v]=f.colA[v+1]=f.colA[v+2]=c;
+    }
+    if(m===NPRE+NB){ tipY=py; tipZ=pz; tipPhi=phiM; tipR=R; }
+  }
+  f.geo.attributes.position.needsUpdate=true; f.geo.attributes.color.needsUpdate=true; f.geo.computeVertexNormals();
+  const cp=Math.cos(tipPhi), sp=Math.sin(tipPhi);                                    // uña en el dorso de la yema
+  f.nail.position.set(0, tipY+cp*tipR*.72-sp*.014, tipZ+sp*tipR*.72+cp*.014); f.nail.rotation.x=tipPhi;
+}
+
+// Antebrazo + muñeca + palma: UNA sola superficie (sin costura). Sección superelíptica que pasa de redonda (antebrazo)
+// a plana y ancha (palma), con tendones y nudillos en el dorso, hueco de la palma, eminencias del pulgar y del meñique.
+const AR = 26, PR = 30, AA = 40, XR = [-.15,-.05,.05,.15];
+const armPalmGeo = (()=>{
+  const zs=[]; for(let i=0;i<=AR;i++) zs.push(-1.7+(1.7-.03)*i/AR);
+  for(let i=1;i<=PR;i++) zs.push(-.03+.57*i/PR);
+  const NR=zs.length, nV=NR*(AA+1), pos=new Float32Array(nV*3), col=new Float32Array(nV*3), uv=new Float32Array(nV*2), idx=[];
+  for(let r=0;r<NR;r++){
+    const z=zs[r]; let hx, hy;
+    if(z<-.03){ const y=-z, rad=y<.9 ? .105+.065*Math.sin(y/.9*Math.PI/2) : .17*Math.cos((y-.9)/.8*Math.PI/2); hx=hy=Math.max(rad,.0005); }
+    else { hx=.112+.16*sm3(0,.38,z); hy=.108-.05*sm3(0,.2,z)-.006*sm3(.2,.45,z);
+           if(z>.44){ const c=Math.sqrt(Math.max(0,1-((z-.44)/.1)**2)); hx*=c; hy*=c; } }
+    const p=2+.8*sm3(-.1,.22,z);
+    for(let a=0;a<=AA;a++){
+      const al=a/AA*TAU, c=Math.cos(al), s=-Math.sin(al);                            // s>0 = dorso, s<0 = palma
+      let x=hx*Math.sign(c)*Math.pow(Math.abs(c),2/p), y=hy*Math.sign(s)*Math.pow(Math.abs(s),2/p), ao=1;
+      if(z>0){
+        const wd=Math.max(0,s), wp=Math.max(0,-s), fz=sm3(0,.1,z);
+        for(const xr of XR) y += wd*fz*(.010*gb(x-xr,.025)*sm3(.05,.2,z)*(1-sm3(.38,.5,z)) + .018*gb(x-xr,.04)*gb(z-.42,.05));   // tendones y nudillos
+        y += wp*fz*(.02*gb(x+.02,.12)*gb(z-.28,.15));                                                                            // hueco de la palma
+        y -= wp*fz*(.032*Math.exp(-(((x-.17)/.1)**2+((z-.1)/.13)**2)) + .018*Math.exp(-(((x+.2)/.08)**2+((z-.14)/.14)**2)));      // pulgar y meñique
+        ao -= wp*.22*gb(x,.16)*gb(z-.28,.16);
+        ao -= .3*sm3(.4,.5,z);                                                                                                      // entre los dedos
+      }
+      ao -= .18*sm3(-.5,-.05,z)*(1-sm3(-.05,.1,z))*.0;
+      let zz=z; if(z>.3){ const e=Math.min(1,Math.abs(x)/.27); zz=z-.075*e*e*sm3(.3,.5,z); }                       // línea de nudillos arqueada
+      if(x>0) x+=.05*gb(z-.1,.12)*Math.min(1,x/.1);                                                            // eminencia lateral del pulgar
+      const v=(r*(AA+1)+a); pos[v*3]=x; pos[v*3+1]=y; pos[v*3+2]=zz;
+      const cv=Math.max(.5,Math.min(1,ao)); col[v*3]=col[v*3+1]=col[v*3+2]=cv; uv[v*2]=a/AA; uv[v*2+1]=r/(NR-1);
+    }
+  }
+  for(let r=0;r<NR-1;r++) for(let a=0;a<AA;a++){ const i0=r*(AA+1)+a, i1=i0+1, i2=i0+AA+1, i3=i2+1; idx.push(i0,i2,i1, i1,i2,i3); }
+  const g=new THREE.BufferGeometry(); g.setIndex(idx);
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setAttribute('uv',new THREE.BufferAttribute(uv,2));
+  g.computeVertexNormals(); return g; })();
+
+// índice → meñique en el lado opuesto al pulgar; medio el más largo; ligero abanico natural
+const FINGERS=[{x:-.15,z:.36,len:.42,r:.044,yaw:-.15,joints:[.45,.77],flare:.7,web:.5},
+               {x:-.05,z:.43,len:.52,r:.048,yaw:-.05,joints:[.45,.77],flare:.7,web:.5},
+               {x:.05,z:.45,len:.57,r:.05,yaw:.03,joints:[.45,.77],flare:.7,web:.5},
+               {x:.15,z:.42,len:.51,r:.049,yaw:.12,joints:[.45,.77],flare:.7,web:.5}];
+const THUMB={len:.46,r:.06,joints:[.36,.7],base:.9}, CURLK=[1.05,1,.95,.9];
+function setCurl(h, c, th, T){
+  for(let n=0;n<4;n++){ const cc=c*CURLK[n]*(1+.05*Math.sin(T*5+n*1.3)); updateFinger(h.fingers[n], cc*.45, cc*.85, cc*.6); }
+  updateFinger(h.thumb, th*.5, th*.7, th*.5);
+}
+function makeHand(mirror){
+  const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
+  body.scale.set(mirror?-HS:HS, HS, HS);
+  body.add(new THREE.Mesh(armPalmGeo,handMat));
+  const fingers=[];
+  for(const d of FINGERS){ const f=fingerRig(d); f.mesh.position.set(d.x,0,d.z); f.mesh.rotation.y=d.yaw; body.add(f.mesh); fingers.push(f); }
+  const thumb=fingerRig(THUMB); thumb.mesh.position.set(.13,-.035,.02); thumb.mesh.rotation.set(.1,.62,.5); body.add(thumb.mesh);
+  const h={g,body,fingers,thumb}; setCurl(h,.3,.3,0); return h;
+}
+const hands = {o:makeHand(false), i:makeHand(true)};
+const handsRoot = new THREE.Group(); handsRoot.add(hands.o.g, hands.i.g); handsRoot.visible = false;
+const cord = new THREE.Mesh(new THREE.CylinderGeometry(.075,.06,1,16,8), clayMat(.1,.15,[.5,.3]));      // el cordón: la misma arcilla
+cord.rotation.z = Math.PI/2; cord.position.set(0,-.07,.62); cord.visible = false; hands.o.body.add(cord);
+handsRoot.traverse(o=>{ if(o.isMesh) o.castShadow = true; });
+scene.add(handsRoot);
+
+// Masa de arcilla de donde sale cada cordón: el mismo barro de la vasija
+const lump = new THREE.Mesh(new THREE.IcosahedronGeometry(.8,5), clayMat(.8,.5,[.1,.2]));
+{ const lp = lump.geometry.attributes.position;
+  for(let i=0;i<lp.count;i++){ const x=lp.getX(i), y=lp.getY(i), z=lp.getZ(i);
+    const s = 1 + .22*noise3(x*2.1+3,y*2.1,z*2.1) + .1*noise3(x*5,y*5+9,z*5);
+    lp.setXYZ(i, x*s*1.25, Math.max(y*s*.8,-.42), z*s); }
+  lump.geometry.computeVertexNormals(); }
+lump.scale.setScalar(.7); lump.position.set(1.65,-.84,-.9); lump.castShadow = true; lump.receiveShadow = true; lump.rotation.y = 1.1;
+scene.add(lump);
+
+// ---------- Coreografía: traer cordón → asentarlo alrededor → apretar entre las dos manos ----------
+const mkPose = () => ({To:new V3(),Fo:new V3(),Ti:new V3(),Fi:new V3()});
+const HW = mkPose(), PA = mkPose(), PB = mkPose();
+B.hp = mkPose();
+const LUMP_T = new V3(1.05,-.35,-.8), LUMP_F = new V3(.9,-.35,-.3).normalize();
+const restO = {T:new V3(4.6,.3,1.2), F:new V3(-1,-.1,-.2).normalize()}, restI = {T:new V3(-4.6,1,1.2), F:new V3(1,-.1,-.2).normalize()};
+const UP = new V3(0,1,0), _t = new V3(), _f = new V3(), _in = new V3();
+function workPose(o, phi, tbTop, sq, dy){          // manos enfrentadas a ambos lados de la pared
+  const s=Math.sin(phi), c=Math.cos(phi), tb=Math.max(tbTop,.028), R=Rp(tb), y=Y0+tb*H+dy;
+  o.To.set(s*(R+.04-sq), y-.1, c*(R+.04-sq));  o.Fo.set(-.79*s, -.62, -.79*c).normalize();   // fuera: palma abajo sobre el borde
+  o.Ti.set(s*(R-.11+sq), y-.12, c*(R-.11+sq)); o.Fi.set(.55*s, -.83, .55*c).normalize();     // dentro: yemas contra la pared
+}
+function place(h, T, F, up, hw, rest){
+  _t.copy(rest.T).lerp(T,hw); _f.copy(rest.F).lerp(F,hw).normalize();
+  const g = h.g; g.position.copy(_t).addScaledVector(_f, -.98*HS);
+  g.up.copy(up); g.lookAt(g.position.x+_f.x, g.position.y+_f.y, g.position.z+_f.z);
+}
+function placeBoth(W, hw){
+  handsRoot.visible = hw>.005; if(!handsRoot.visible) return;
+  place(hands.o, W.To, W.Fo, UP, hw, restO);
+  _in.set(-W.Ti.x,0,-W.Ti.z); if(_in.lengthSq()<1e-4) _in.set(0,0,-1); _in.normalize();      // la palma interior mira a la pared
+  place(hands.i, W.Ti, W.Fi, _in, hw, restI);
+}
+function updateHands(T, st, ph, fetch, lay, press, hw){
+  const kk=st.kk, tbP=st.tbPrev, tbN=st.tbNext, phiN=st.phi0;
+  let sc=0, curlO=.3, curlI=.25;
+  if(kk===0){ workPose(HW, phi0For(1), 0, 0, .06); }
+  else if(ph===0){                                  // traer cordón: sale de la masa y llega al borde
+    const phiP = kk<=1 ? phiN : (phi0For(kk-1)+WD*.5);
+    workPose(PA, phiP, tbP, 0, 0); workPose(PB, phiN, tbP, 0, 0);
+    if(fetch<.45){ const e=smooth01(0,.45,fetch); HW.To.copy(PA.To).lerp(LUMP_T,e); HW.Fo.copy(PA.Fo).lerp(LUMP_F,e); HW.To.y+=Math.sin(Math.PI*e)*.6; }
+    else { const e=smooth01(.45,1,fetch); HW.To.copy(LUMP_T).lerp(PB.To,e); HW.Fo.copy(LUMP_F).lerp(PB.Fo,e); HW.To.y+=Math.sin(Math.PI*e)*.6; }
+    const e3=smooth01(0,1,fetch); HW.Ti.copy(PA.Ti).lerp(PB.Ti,e3); HW.Fi.copy(PA.Fi).lerp(PB.Fi,e3); HW.Ti.y+=Math.sin(Math.PI*e3)*.25;
+    sc=smooth01(.3,.5,fetch); curlO=.6+.1*sc; curlI=.2;
+  }else if(ph===1){                                 // asentar el cordón rodeando la boca
+    workPose(HW, phiN+Gs(lay)*(TAU+WD)-WD*.5, tbN, 0, 0);
+    sc=1-.95*lay; curlO=.45+.08*Math.sin(lay*TAU*3); curlI=.3+.06*Math.sin(lay*TAU*3+1);
+  }else{                                            // apretar entre las dos manos hasta fundir la junta
+    workPose(HW, phiN+TAU+WD*.5, tbN, .03*Math.sin(press*TAU*2), press*.05);
+    curlO=.3+.15*Math.sin(press*TAU*2); curlI=.35+.1*Math.sin(press*TAU*2+1);
+  }
+  B.hp.To.copy(HW.To); B.hp.Fo.copy(HW.Fo); B.hp.Ti.copy(HW.Ti); B.hp.Fi.copy(HW.Fi);
+  placeBoth(HW, hw);
+  // al tomar barro las manos se van tiñendo hasta quedar de la misma tonalidad de la vasija
+  const grab = kk===0 ? 0 : Math.max(0,kk-1) + (ph===0 ? .5*smooth01(.3,.5,fetch) : ph===1 ? .5+.3*lay : .8+.2*press);
+  const ca = smooth01(0, B.fast?2.5:4.5, grab);
+  handMat.color.setRGB(.58+.42*ca, .42+.58*ca, .34+.66*ca); handMat.roughness = .62+.26*ca;
+  setCurl(hands.o, curlO+.04*Math.sin(T*7), .5, T); setCurl(hands.i, curlI+.03*Math.sin(T*6+2), .3, T+2);
+  cord.visible = sc>.01 && hw>.5; cord.scale.set(1, Math.max(.001,.95*sc), 1);
+}
+
+// ---------- Estado de la construcción ----------
+const hwIn = T => smooth01(B.t0, B.t0+Math.min(.7,-B.t0*.78), T);
+function updateBuild(now){
+  const dt = Math.min(.05, Math.max(0, now-B.last)); B.last = now;
+  if(B.phase==='ready'){ if(B.dirty){ B.st={kk:0,lay:0,tbPrev:0,tbNext:0,phi0:0}; applyBuild(); B.dirty=false; } return; }
+  if(B.phase==='done') return;
+  if(B.phase==='build'){
+    B.time += dt;
+    const T=B.time, endT=K*B.Tc;
+    let kk, u;
+    if(T<0){ kk=0; u=0; } else if(T>=endT){ kk=K+1; u=1; } else { const kf=T/B.Tc; kk=Math.floor(kf)+1; u=kf-Math.floor(kf); }
+    const ph = u<.28 ? 0 : (u<.72 ? 1 : 2);
+    const fetch=Math.min(1,u/.28), lay=Math.min(1,Math.max(0,(u-.28)/.44)), press=Math.min(1,Math.max(0,(u-.72)/.28));
+    B.st = {kk, lay:kk>=1?lay:0, tbPrev:Math.max(0,kk-1)/K, tbNext:Math.min(kk,K)/K, phi0:phi0For(Math.max(kk,1))};
+    for(let k=0;k<K;k++) B.ringAmp[k] = (k+1<kk) ? RES : (k+1===kk ? PEAK+(RES-PEAK)*smooth01(0,1,press) : 0);   // cordón fresco → junta fundida
+    applyBuild();
+    if(kk<=K){
+      updateHands(T, B.st, ph, fetch, lay, press, hwIn(T));
+      if(kk>=1 && kk!==B.ring){ B.ring=kk; setStatus('Rollo tinajero · anillo '+kk+' de '+K); }
+    }else{
+      finishBuild(); B.phase='outro'; B.outroT=0; cord.visible=false;
+      $('skip').style.display='none';
+      setStatus(micOn ? 'Micrófono activo — habla, canta o silba' : 'Vasija lista — pulsa Iniciar micrófono');
+      if(pendingPlayId!=null){ const r=recs.find(x=>String(x.id)===String(pendingPlayId)); pendingPlayId=null; if(r) playRec(r); }   // reproducción que esperaba a la vasija
+    }
+    return;
+  }
+  if(B.phase==='outro'){                            // las manos se retiran y la voz ya moldea la pieza
+    B.outroT += dt;
+    const hw = 1 - smooth01(0,B.OUTRO,B.outroT);
+    placeBoth(B.hp, hw); lump.scale.setScalar(Math.max(.001,.7*hw)); lump.visible = hw>.005;
+    if(B.outroT>=B.OUTRO){ B.phase='done'; handsRoot.visible=false; lump.visible=false; }
+  }
+}
+function startBuild(fast){
+  B.phase='build'; B.fast=fast; B.Tc=fast?.6:1.3; B.t0=fast?-.45:-.9; B.time=B.t0; B.ring=0; B.outroT=0; B.ringAmp.fill(0);
+  handsRoot.visible=true; lump.visible=true; lump.scale.setScalar(.7);
+  $('skip').style.display='block';
+  setStatus('Construyendo la vasija con la técnica del rollo tinajero…');
+}
+function newVessel(){                               // una vasija nueva, distinta, que se levanta otra vez con las manos
+  handForm(); origInit.set(orig);
+  P = {k1:14,k2:26,k3:5,m1:2,ph:0}; reseedDyn(); for(const k in S) S[k]=0;
+  tilt.rotation.set(THREE.MathUtils.degToRad((Math.random()*2-1)*.8*HAND), 0, THREE.MathUtils.degToRad((Math.random()*2-1)*1.6*HAND));
+  if(paused){ paused=false; const b=$('pause'); b.textContent='Pausar (espacio)'; b.classList.remove('paused'); }
+  startBuild(true);
+}
+$('skip').onclick = () => { if(B.phase==='build') B.time = Math.max(B.time, K*B.Tc); };
+
+// ---------- HUD ----------
+const hud = [['l','low'],['m','mid'],['h','high'],['v','vol']];
+function updateHUD(){
+  for(const [k,key] of hud){
+    $('v'+k).textContent = S[key].toFixed(2);
+    $('b'+k).style.width = (S[key]*100).toFixed(0)+'%';
+  }
+}
+
+// ================== CATÁLOGO DE GRABACIONES ==================
+// Grabar con el micrófono, cargar archivos de audio y reproducirlos: la vasija se mueve con lo que suena.
+// Se guardan en el navegador (IndexedDB), así que siguen ahí al volver a abrir la página.
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtT = s => { if(!isFinite(s) || s<=0) return '—'; return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'); };
+const fmtB = n => n>1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB';
+const ICON = {
+  play:'<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>',
+  pause:'<svg viewBox="0 0 16 16"><path d="M3.5 2h3.2v12H3.5zm5.8 0h3.2v12H9.3z"/></svg>',
+  del:'<svg viewBox="0 0 16 16"><path d="M3.5 2.4 8 6.9l4.5-4.5 1.1 1.1L9.1 8l4.5 4.5-1.1 1.1L8 9.1l-4.5 4.5-1.1-1.1L6.9 8 2.4 3.5z"/></svg>',
+  dl:'<svg viewBox="0 0 16 16"><path d="M7.2 1.5h1.6v6.2l2.3-2.3 1.1 1.1L8 10.6 3.8 6.5l1.1-1.1 2.3 2.3zM2.5 12h11v1.7h-11z"/></svg>'
+};
+
+// --- almacenamiento ---
+let dbp = null, dbOK = true;
+function dbOpen(){ if(!dbp) dbp = new Promise((res,rej)=>{ try{ const q=indexedDB.open('voces-de-barro',1); q.onupgradeneeded=()=>q.result.createObjectStore('recs',{keyPath:'id',autoIncrement:true}); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }catch(e){ rej(e); } }); return dbp; }
+const dbStore = mode => dbOpen().then(db => db.transaction('recs',mode).objectStore('recs'));
+const dbReq = r => new Promise((res,rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+const dbAll = async () => dbReq((await dbStore('readonly')).getAll());
+const dbPut = async rec => dbReq((await dbStore('readwrite')).put(rec));
+const dbDel = async id => dbReq((await dbStore('readwrite')).delete(id));
+
+let recs = [], playId = null, pendingPlayId = null;
+const sameId = (a,b) => String(a)===String(b);
+async function loadCatalog(){
+  try{ recs = await dbAll(); }catch(e){ dbOK = false; console.warn('IndexedDB no disponible', e); }
+  recs.sort((a,b)=>b.created-a.created); renderCatalog();
+}
+async function addRec(rec){
+  rec.created = Date.now();
+  try{ if(!dbOK) throw 0; rec.id = await dbPut(rec); }
+  catch(e){ if(dbOK){ dbOK=false; setStatus('Este navegador no deja guardar de forma permanente: las grabaciones durarán hasta cerrar la página.', true); } rec.id = 'm'+rec.created+Math.random(); }
+  recs.unshift(rec); renderCatalog(); return rec;
+}
+async function persist(r){ try{ if(dbOK) await dbPut(r); }catch(e){} }
+
+async function updateQuota(){
+  try{ if(!navigator.storage || !navigator.storage.estimate) return;
+    const e = await navigator.storage.estimate(), free = (e.quota||0)-(e.usage||0); if(!(free>0)) return;
+    const h = free/8000/3600;          // 64 kbps = 8000 bytes por segundo
+    $('cquota').textContent = 'Sin límite fijo de duración. Espacio libre en este navegador: ≈ '+(h>=100?'más de 100':h.toFixed(h<10?1:0))+' h de grabación.';
+  }catch(e){}
+}
+function renderCatalog(){
+  updateQuota();
+  $('catbtn').textContent = 'Catálogo ('+recs.length+')';
+  const L = $('catlist');
+  if(!recs.length){ L.innerHTML = '<div class="cempty">Aún no hay grabaciones. Pulsa «Grabar» y canta algo largo, o carga un archivo de audio: se guarda aquí y, al reproducirlo, la vasija se mueve con él.</div>'; return; }
+  L.innerHTML = recs.map(r => { const on = sameId(r.id,playId), pl = on && playing;
+    return '<div class="item'+(on?' on':'')+'" data-id="'+esc(r.id)+'">'
+     +'<button class="ibtn play" aria-label="'+(pl?'Pausar':'Reproducir')+'">'+(pl?ICON.pause:ICON.play)+'</button>'
+     +'<div class="meta"><div class="nm" title="Doble clic para renombrar">'+esc(r.name)+'</div>'
+     +'<div class="sub">'+(r.kind==='file'?'Archivo':'Grabación')+' · '+fmtT(r.dur)+' · '+fmtB(r.blob.size)+'</div>'+(on?'<div class="prog"><i></i></div>':'')+'</div>'
+     +'<button class="ibtn dl" aria-label="Descargar">'+ICON.dl+'</button><button class="ibtn del" aria-label="Borrar">'+ICON.del+'</button></div>'; }).join('');
+  updateProg();
+}
+
+// --- reproducción: el audio entra al mismo analizador que el micrófono ---
+let player = null, playerNode = null, playUrl = null;
+function ensurePlayer(){
+  if(player) return;
+  player = new Audio(); player.preload = 'auto';
+  playerNode = actx.createMediaElementSource(player); playerNode.connect(analyser); playerNode.connect(actx.destination);
+  player.addEventListener('ended', () => stopPlayback(true));
+  player.addEventListener('timeupdate', updateProg);
+}
+function routeMic(on){ if(!micNode || !analyser) return; try{ if(on) micNode.connect(analyser); else micNode.disconnect(analyser); }catch(e){} }
+function updateProg(){
+  const i = document.querySelector('.item.on .prog i'); if(!i || !player) return;
+  const r = recs.find(x=>sameId(x.id,playId)), d = (isFinite(player.duration) && player.duration>0) ? player.duration : (r && r.dur) || 0;
+  i.style.width = d ? Math.min(100, player.currentTime/d*100)+'%' : '0%';
+}
+async function playRec(r){
+  if(recording){ setStatus('Detén la grabación antes de reproducir.', true); return; }
+  if(B.phase==='ready' || B.phase==='build'){          // la vasija primero se levanta; luego suena
+    pendingPlayId = r.id; kickoff(true); setStatus('La vasija se está levantando; «'+r.name+'» sonará al terminar.'); return; }
+  await ensureAudio(); ensurePlayer();
+  if(playUrl) URL.revokeObjectURL(playUrl);
+  playUrl = URL.createObjectURL(r.blob); player.src = playUrl;
+  routeMic(false); playing = true; playId = r.id; $('pause').style.display = 'block';
+  try{ await player.play(); setStatus('Reproduciendo: «'+r.name+'»'); }
+  catch(e){ playing=false; playId=null; routeMic(true); setStatus('No se pudo reproducir este archivo: '+(e.message||e), true); }
+  renderCatalog();
+}
+function pausePlayback(){ if(!player) return; player.pause(); playing=false; routeMic(true); renderCatalog(); }
+async function resumePlayback(){ routeMic(false); playing=true; try{ await player.play(); }catch(e){ playing=false; routeMic(true); } renderCatalog(); }
+function stopPlayback(ended){
+  if(player){ player.pause(); if(!ended) player.currentTime = 0; }
+  playing = false; playId = null; routeMic(true); renderCatalog();
+  setStatus(micOn ? 'Micrófono activo — habla, canta o silba' : 'Reproducción terminada');
+}
+function togglePlay(r){ if(sameId(playId,r.id) && player && player.src){ playing ? pausePlayback() : resumePlayback(); } else playRec(r); }
+
+// --- acciones del catálogo ---
+function downloadRec(r){
+  const t = r.blob.type||'', ext = /mp4|m4a/.test(t)?'m4a' : /ogg|opus/.test(t)?'ogg' : /wav/.test(t)?'wav' : /mpeg|mp3/.test(t)?'mp3' : /flac/.test(t)?'flac' : 'webm';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(r.blob); a.download = (r.name.replace(/[\\/:*?"<>|]+/g,'_')||'voces')+'.'+ext; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+async function deleteRec(r){
+  if(!confirm('¿Borrar «'+r.name+'»?')) return;
+  if(sameId(playId,r.id)) stopPlayback(false);
+  recs = recs.filter(x=>x!==r); try{ if(dbOK) await dbDel(r.id); }catch(e){} renderCatalog();
+}
+$('catlist').addEventListener('click', e => {
+  const it = e.target.closest('.item'); if(!it) return;
+  const r = recs.find(x=>sameId(x.id, it.dataset.id)); if(!r) return;
+  if(e.target.closest('.play')) togglePlay(r);
+  else if(e.target.closest('.dl')) downloadRec(r);
+  else if(e.target.closest('.del')) deleteRec(r);
+  else if(e.target.closest('.prog') && player && isFinite(player.duration) && player.duration>0){
+    const b = e.target.closest('.prog'); player.currentTime = Math.max(0,Math.min(1,(e.clientX-b.getBoundingClientRect().left)/b.clientWidth))*player.duration; }
+});
+$('catlist').addEventListener('dblclick', e => {
+  const n = e.target.closest('.nm'); if(!n) return;
+  const r = recs.find(x=>sameId(x.id, n.closest('.item').dataset.id)); if(!r) return;
+  const v = prompt('Nombre de la grabación', r.name); if(v && v.trim()){ r.name = v.trim().slice(0,80); persist(r); renderCatalog(); }
+});
+$('catbtn').onclick = () => { $('catalog').classList.toggle('open'); updateQuota(); };
+$('catclose').onclick = () => $('catalog').classList.remove('open');
+addEventListener('keydown', e => { if(e.key==='Escape') $('catalog').classList.remove('open'); });
+
+// --- grabar con el micrófono ---
+let recorder = null, recChunks = [], recT0 = 0, recTimer = null, recording = false;
+const pickMime = () => { for(const m of ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus']){ if(window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; } return ''; };
+async function toggleRec(){
+  if(recording){ if(recorder && recorder.state!=='inactive') recorder.stop(); return; }
+  if(typeof MediaRecorder==='undefined'){ setStatus('Este navegador no permite grabar audio (falta MediaRecorder).', true); return; }
+  if(playing) stopPlayback(false);
+  kickoff(false); await ensureMic();
+  if(!micOn || !micStream) return;                        // permiso denegado: startMic ya explicó el motivo
+  const mime = pickMime(); recChunks = [];
+  try{ recorder = mime ? new MediaRecorder(micStream,{mimeType:mime, audioBitsPerSecond:64000}) : new MediaRecorder(micStream,{audioBitsPerSecond:64000}); }
+  catch(e){ setStatus('No se pudo iniciar la grabación: '+(e.message||e), true); return; }
+  recorder.ondataavailable = e => { if(e.data && e.data.size) recChunks.push(e.data); };
+  recorder.onstop = onRecStop;
+  recorder.start(1000); recording = true; recT0 = performance.now();
+  $('rec').classList.add('recording'); $('rectxt').textContent = 'Detener · 0:00';
+  recTimer = setInterval(()=>{ $('rectxt').textContent = 'Detener · '+fmtT((performance.now()-recT0)/1000); }, 250);
+  setStatus('Grabando… canta o habla; pulsa «Detener» para guardar.');
+}
+async function onRecStop(){
+  clearInterval(recTimer); recording = false; $('rec').classList.remove('recording'); $('rectxt').textContent = 'Grabar';
+  const dur = (performance.now()-recT0)/1000, blob = new Blob(recChunks, {type: recorder.mimeType || 'audio/webm'}); recChunks = [];
+  if(!blob.size){ setStatus('La grabación quedó vacía.', true); return; }
+  const stamp = new Date().toLocaleString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  const rec = await addRec({name:'Grabación · '+stamp, kind:'rec', dur, blob});
+  $('catalog').classList.add('open');
+  setStatus('Guardada en el catálogo: «'+rec.name+'» ('+fmtT(dur)+').');
+}
+$('rec').onclick = toggleRec;
+
+// --- cargar archivos de audio propios ---
+function probeDur(blob){ return new Promise(res => { const a=new Audio(), u=URL.createObjectURL(blob);
+  const done = d => { URL.revokeObjectURL(u); res(isFinite(d)?d:0); };
+  a.preload='metadata'; a.onloadedmetadata=()=>done(a.duration); a.onerror=()=>done(0); setTimeout(()=>done(0),4000); a.src=u; }); }
+$('loadbtn').onclick = () => $('file').click();
+$('file').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = ''; let n = 0;
+  for(const f of files){
+    if(!(f.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|oga|opus|webm|flac)$/i.test(f.name))){ setStatus('«'+f.name+'» no parece un archivo de audio.', true); continue; }
+    await addRec({name:f.name.replace(/\.[^.]+$/,''), kind:'file', dur:await probeDur(f), blob:f}); n++;
+  }
+  if(n) setStatus(n+(n>1?' archivos cargados':' archivo cargado')+' en el catálogo. Pulsa reproducir para que la vasija se mueva con él.');
+};
+loadCatalog();
+
+// ---------- Loop ----------
+function resize(){
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+
+const clock = new THREE.Clock();
+function loop(){
+  requestAnimationFrame(loop);
+  updateBuild(clock.getElapsedTime());
+  if(!paused){
+    const raw = analyse(); Object.assign(VF, raw);
+    for(const k in S) S[k] += (raw[k]-S[k])*(raw[k]>S[k]?0.6:0.12); // ataque rápido, caída suave
+    updateDyn(clock.getElapsedTime(), raw);
+    if(B.phase!=='ready' && B.phase!=='build') deform(clock.getElapsedTime());   // mientras se construye, la voz no deforma
+  }
+  updateHUD();
+  updateEnv();
+  controls.update();
+  renderer.render(scene,camera);
+}
+loop();
+
+// ---------- Exportar STL ----------
+$('export').onclick = () => {
+  const g = geo.clone();
+  g.scale(40,40,40); // 1 unidad = 40 mm
+  const tmp = new THREE.Mesh(g, mat);
+  tmp.rotation.y = vase.rotation.y;
+  tmp.updateMatrixWorld(true);
+  const data = new THREE.STLExporter().parse(tmp, {binary:true});
+  const blob = new Blob([data], {type:'model/stl'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'voces_de_barro_' + Date.now() + '.stl';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  g.dispose();
+};
+
+// ---------- Pausa / reanudar / reiniciar ----------
+function bake(){
+  orig.set(pos.array);   // congela la forma actual como nueva base de arcilla
+  let maxR=0, maxY=0;
+  for(let i=0;i<pos.count;i++){ maxR=Math.max(maxR,Math.hypot(orig[i*3],orig[i*3+2])); maxY=Math.max(maxY,orig[i*3+1]); }
+  const s = Math.min(1, 1.6/maxR, 2.9/maxY);
+  if(s<1) for(let i=0;i<orig.length;i++) orig[i]*=s;
+  pos.array.set(orig); pos.needsUpdate = true; geo.computeVertexNormals();
+}
+function togglePause(){
+  if((!micOn && !playing) || B.phase==='build' || B.phase==='ready') return;
+  paused = !paused;
+  const b = $('pause');
+  if(paused){
+    bake();
+    for(const k in S) S[k]=0;
+    updateHUD();
+    b.textContent = 'Reanudar (espacio)'; b.classList.add('paused');
+    setStatus('Pausado — la forma queda congelada. Reanuda para sumarle una nueva modificación.');
+  }else{
+    P = newParams(); reseedDyn();
+    b.textContent = 'Pausar (espacio)'; b.classList.remove('paused');
+    setStatus('Micrófono activo — la nueva voz modifica la forma anterior');
+  }
+}
+$('pause').onclick = togglePause;
+addEventListener('keydown', e => { if(e.code==='Space'){ e.preventDefault(); togglePause(); } });
+$('reset').onclick = () => newVessel();   // vasija nueva: se vuelve a levantar con las manos
+
+$('fs').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+</script>
+</body>
+</html>
